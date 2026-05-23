@@ -44,5 +44,6 @@ export interface ClipRef {
     url: string
     pageTitle: string
     domain: string
+    content_type: ContentType
     clip: Clip
 }

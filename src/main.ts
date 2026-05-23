@@ -3,11 +3,25 @@ import { processHighlight, scanAndTransform } from './renderers/highlight'
 import { processFullPage, injectFullPageHeader } from './renderers/fullPage'
 import { ClipManagerView, VIEW_CLIP_MANAGER } from './views/ClipManagerView'
 
+export interface PluginSettings {
+    visibleColumns: string[]
+    columnOrder: string[]
+}
+
+const DEFAULT_SETTINGS: PluginSettings = {
+    visibleColumns: ['clip_type', 'page_title', 'domain', 'saved_at'],
+    columnOrder: [],
+}
+
 export default class QuickClipCapturePlugin extends Plugin {
+    settings!: PluginSettings
+
     async onload(): Promise<void> {
+        await this.loadSettings()
+
         this.registerView(
             VIEW_CLIP_MANAGER,
-            (leaf) => new ClipManagerView(leaf)
+            (leaf) => new ClipManagerView(leaf, this)
         )
 
         this.registerMarkdownPostProcessor((el, ctx) => {
@@ -31,7 +45,7 @@ export default class QuickClipCapturePlugin extends Plugin {
             })
         )
 
-        this.addRibbonIcon('scissors', 'QuickClip Manager', () => this.activateView())
+        this.addRibbonIcon('scissors', 'QuickClip Capture', () => this.activateView())
 
         this.addCommand({
             id: 'open-manager',
@@ -42,6 +56,14 @@ export default class QuickClipCapturePlugin extends Plugin {
 
     onunload(): void {
         this.app.workspace.detachLeavesOfType(VIEW_CLIP_MANAGER)
+    }
+
+    async loadSettings(): Promise<void> {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData())
+    }
+
+    async saveSettings(): Promise<void> {
+        await this.saveData(this.settings)
     }
 
     private async activateView(): Promise<void> {

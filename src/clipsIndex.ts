@@ -23,7 +23,7 @@ export function getAllClips(index: ClipsIndex): ClipRef[] {
     const refs: ClipRef[] = []
     for (const [url, entry] of Object.entries(index)) {
         for (const clip of entry.clips) {
-            refs.push({ url, clip, pageTitle: entry.title, domain: entry.domain })
+            refs.push({ url, clip, pageTitle: entry.title, domain: entry.domain, content_type: entry.content_type })
         }
     }
     return refs.sort((a, b) => b.clip.savedAt.localeCompare(a.clip.savedAt))
