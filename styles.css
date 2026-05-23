@@ -4,15 +4,48 @@
     border-left: 3px solid var(--color-accent);
     background: var(--background-secondary);
     border-radius: 6px;
-    padding: 14px 16px 12px;
-    margin: 24px 0;
+    padding: 16px 18px 14px;
+    margin: 8px 0 24px;
+}
+
+.qc-note-callout {
+    margin-bottom: 14px;
+}
+
+.qc-note-callout .callout-title {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.qc-note-callout .callout-title p {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── Highlight Quote ─────────────────────────────────────────── */
+
+.qc-quote-block {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 16px 0 8px;
+}
+
+.qc-quote-icon {
+    font-size: 2.2em;
+    line-height: 0.75;
+    color: var(--color-accent);
+    flex-shrink: 0;
+    font-family: Georgia, 'Times New Roman', serif;
+    opacity: 0.6;
 }
 
 .qc-highlight-quote {
     font-size: 1em;
     line-height: 1.6;
     color: var(--text-normal);
-    margin-bottom: 10px;
 }
 
 .qc-highlight-quote p {
@@ -29,54 +62,42 @@
     display: block;
 }
 
-.qc-highlight-note {
-    font-size: 0.85em;
-    color: var(--text-muted);
-    font-style: italic;
-    padding: 6px 10px;
-    margin: 8px 0 0;
-    border-left: 2px solid var(--background-modifier-border);
+.qc-highlight-footer {
+    margin-top: 4px;
 }
 
-.qc-highlight-note p {
-    margin: 0;
-}
-
-.qc-highlight-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 8px;
+.qc-sep {
+    border: none;
     border-top: 1px solid var(--background-modifier-border);
+    margin: 12px 0;
 }
 
 .qc-highlight-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
+    padding: 2px 0;
 }
 
 .qc-highlight-actions {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
 }
 
-.qc-view-link a {
+.qc-view-link {
     font-size: 0.8em;
     color: var(--color-accent);
     text-decoration: none;
 }
 
-.qc-view-link a:hover {
+.qc-view-link:hover {
     text-decoration: underline;
 }
 
 .qc-captured {
     font-size: 0.75em;
     color: var(--text-muted);
-    margin-left: auto;
 }
 
 /* Hide the --- separator that immediately follows a transformed table */

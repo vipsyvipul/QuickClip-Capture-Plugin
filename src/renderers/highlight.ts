@@ -20,13 +20,11 @@ class HighlightScanner extends MarkdownRenderChild {
 }
 
 function transformSection(calloutSection: HTMLElement): void {
-    // Already transformed
     if (calloutSection.querySelector('.qc-highlight-card')) return
 
     const callout = calloutSection.querySelector<HTMLElement>('[data-callout="quote"]')
     if (!callout) return
 
-    // The metadata table must be the immediate next sibling
     const tableSection = calloutSection.nextElementSibling as HTMLElement | null
     if (!tableSection) return
 
@@ -37,12 +35,10 @@ function transformSection(calloutSection: HTMLElement): void {
     const hasCaptured = rows.some(r => (r.cells[0]?.textContent?.trim() ?? '') === 'Captured')
     if (!hasCaptured) return
 
-    // Optional [!note] block immediately before this callout
     const prevSection = calloutSection.previousElementSibling as HTMLElement | null
-    const noteCallout = prevSection?.querySelector<HTMLElement>('[data-callout="note"]') ?? null
+    const noteSection = prevSection?.querySelector('[data-callout="note"]') ? prevSection : null
 
-    buildCard(calloutSection, tableSection, callout, table as HTMLTableElement, noteCallout, prevSection)
-
+    buildCard(calloutSection, tableSection, callout, table as HTMLTableElement, noteSection)
 }
 
 // Called from main.ts on active-leaf-change to re-apply after Obsidian cache resets
@@ -61,8 +57,7 @@ function buildCard(
     tableSection: HTMLElement,
     callout: HTMLElement,
     table: HTMLTableElement,
-    noteCallout: HTMLElement | null,
-    noteSection: HTMLElement | undefined | null
+    noteSection: HTMLElement | null
 ): void {
     const contentEl = callout.querySelector('.callout-content')
     if (!contentEl) return
@@ -84,38 +79,31 @@ function buildCard(
         }
     }
 
-    const card = document.createElement('div')
-    card.className = 'qc-highlight-card'
+    // Quote block
+    const quoteBlock = document.createElement('div')
+    quoteBlock.className = 'qc-quote-block'
 
-    // Quote / image content
+    const quoteIcon = document.createElement('span')
+    quoteIcon.className = 'qc-quote-icon'
+    quoteIcon.textContent = '❝'
+
     const quoteEl = document.createElement('div')
     quoteEl.className = 'qc-highlight-quote'
     quoteEl.innerHTML = contentEl.innerHTML
 
-    // If content is purely an image, add image-specific class for styling
-    const hasOnlyImage = !!(quoteEl.querySelector('img')) &&
-        (quoteEl.textContent?.trim() ?? '') === ''
+    const hasOnlyImage = !!(quoteEl.querySelector('img')) && (quoteEl.textContent?.trim() ?? '') === ''
     if (hasOnlyImage) quoteEl.classList.add('qc-highlight-quote--image')
 
-    card.appendChild(quoteEl)
+    quoteBlock.appendChild(quoteIcon)
+    quoteBlock.appendChild(quoteEl)
 
-    // Inline note annotation
-    if (noteCallout) {
-        const noteContent = noteCallout.querySelector('.callout-content')
-        if (noteContent) {
-            const noteEl = document.createElement('div')
-            noteEl.className = 'qc-highlight-note'
-            noteEl.innerHTML = noteContent.innerHTML
-            card.appendChild(noteEl)
-            if (noteSection) noteSection.style.display = 'none'
-        }
-    }
-
-    // Meta
-    const metaEl = document.createElement('div')
-    metaEl.className = 'qc-highlight-meta'
+    // Footer
+    const footer = document.createElement('div')
+    footer.className = 'qc-highlight-footer'
 
     if (tags.length) {
+        const sep1 = document.createElement('hr')
+        sep1.className = 'qc-sep'
         const tagsEl = document.createElement('div')
         tagsEl.className = 'qc-highlight-tags'
         tags.forEach(tag => {
@@ -125,8 +113,12 @@ function buildCard(
             chip.href = tag
             tagsEl.appendChild(chip)
         })
-        metaEl.appendChild(tagsEl)
+        footer.appendChild(sep1)
+        footer.appendChild(tagsEl)
     }
+
+    const sep2 = document.createElement('hr')
+    sep2.className = 'qc-sep'
 
     const actionsEl = document.createElement('div')
     actionsEl.className = 'qc-highlight-actions'
@@ -135,7 +127,7 @@ function buildCard(
         const link = document.createElement('a')
         link.href = viewHref
         link.className = 'qc-view-link external-link'
-        link.textContent = 'View with highlight ↗'
+        link.textContent = 'View at source ↗'
         link.target = '_blank'
         link.rel = 'noopener'
         actionsEl.appendChild(link)
@@ -148,8 +140,36 @@ function buildCard(
         actionsEl.appendChild(capturedEl)
     }
 
-    metaEl.appendChild(actionsEl)
-    card.appendChild(metaEl)
+    footer.appendChild(sep2)
+    footer.appendChild(actionsEl)
+
+    const card = document.createElement('div')
+    card.className = 'qc-highlight-card'
+
+    if (noteSection) {
+        const noteCallout = noteSection.querySelector('[data-callout="note"]')
+        if (noteCallout) {
+            const cloned = noteCallout.cloneNode(true) as HTMLElement
+            cloned.classList.add('qc-note-callout')
+
+            // Remove "Note" title text
+            cloned.querySelector('.callout-title-inner')?.remove()
+
+            // Move content nodes inline into the title (after the icon)
+            const calloutTitle = cloned.querySelector<HTMLElement>('.callout-title')
+            const calloutContent = cloned.querySelector<HTMLElement>('.callout-content')
+            if (calloutTitle && calloutContent) {
+                Array.from(calloutContent.childNodes).forEach(n => calloutTitle.appendChild(n))
+                calloutContent.remove()
+            }
+
+            card.appendChild(cloned)
+        }
+        noteSection.style.display = 'none'
+    }
+
+    card.appendChild(quoteBlock)
+    card.appendChild(footer)
 
     calloutSection.innerHTML = ''
     calloutSection.appendChild(card)
