@@ -6,11 +6,17 @@ import { ClipManagerView, VIEW_CLIP_MANAGER } from './views/ClipManagerView'
 export interface PluginSettings {
     visibleColumns: string[]
     columnOrder: string[]
+    filterFormat: string
+    filterSource: string
+    filterDate: string
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
     visibleColumns: ['clip_type', 'page_title', 'domain', 'saved_at'],
     columnOrder: [],
+    filterFormat: '',
+    filterSource: '',
+    filterDate: '',
 }
 
 export default class QuickClipCapturePlugin extends Plugin {

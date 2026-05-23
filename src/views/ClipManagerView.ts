@@ -88,20 +88,148 @@ export class ClipManagerView extends ItemView {
         const header = contentEl.createDiv('qc-manager-header')
         header.createEl('h2', { text: 'QuickClip Capture' })
         const right = header.createDiv('qc-manager-header-right')
-        right.createDiv('qc-manager-count').setText(
-            `${this.clips.length} clip${this.clips.length !== 1 ? 's' : ''}`
-        )
+        right.createDiv('qc-manager-count')
         this.renderColumnPicker(right)
 
         if (this.clips.length === 0) {
+            this.updateCount()
             contentEl.createDiv('qc-manager-empty').setText(
                 'No clips yet. Start saving from the browser extension.'
             )
             return
         }
 
+        this.renderFilterBar(contentEl)
+        this.updateCount()
+
         const wrap = contentEl.createDiv('qc-manager-table-wrap')
-        this.renderTable(wrap)
+        const filtered = this.getFiltered()
+        if (filtered.length === 0) {
+            wrap.createDiv('qc-manager-empty').setText('No clips match the current filters.')
+        } else {
+            this.renderTable(wrap, filtered)
+        }
+    }
+
+    private filterFormatEl!: HTMLSelectElement
+    private filterSourceEl!: HTMLSelectElement
+    private filterDateEl!: HTMLSelectElement
+    private filterClearBtn!: HTMLButtonElement
+
+    private renderFilterBar(container: HTMLElement): void {
+        const bar = container.createDiv('qc-filter-bar')
+        bar.createSpan({ cls: 'qc-filter-heading', text: 'Filters:' })
+
+        const formats = [...new Set(this.clips.map(r => r.clip.clip_type).filter(Boolean))].sort()
+        this.filterFormatEl = this.createFilterSelect(bar, 'Format', [
+            { value: '', label: 'All formats' },
+            ...formats.map(f => ({ value: f, label: CLIP_TYPE_LABELS[f] ?? f })),
+        ], this.plugin.settings.filterFormat)
+
+        const domains = [...new Set(this.clips.map(r => r.domain ?? '').filter(Boolean))].sort()
+        this.filterSourceEl = this.createFilterSelect(bar, 'Domain', [
+            { value: '', label: 'All domains' },
+            ...domains.map(d => ({ value: d, label: d.replace(/^www\./, '') })),
+        ], this.plugin.settings.filterSource)
+
+        this.filterDateEl = this.createFilterSelect(bar, 'Date', [
+            { value: '',      label: 'All time' },
+            { value: 'today', label: 'Today' },
+            { value: 'week',  label: 'Last 7 days' },
+            { value: 'month', label: 'Last 30 days' },
+        ], this.plugin.settings.filterDate)
+
+        this.filterClearBtn = bar.createEl('button', { cls: 'qc-filter-clear', text: '✕ Clear' })
+        this.filterClearBtn.addEventListener('click', async () => {
+            this.plugin.settings.filterFormat = ''
+            this.plugin.settings.filterSource = ''
+            this.plugin.settings.filterDate = ''
+            await this.plugin.saveSettings()
+            this.filterFormatEl.value = ''
+            this.filterSourceEl.value = ''
+            this.filterDateEl.value = ''
+            ;[this.filterFormatEl, this.filterSourceEl, this.filterDateEl]
+                .forEach(el => el.removeClass('qc-filter-select--active'))
+            this.updateFilterClear()
+            this.applyFilters()
+        })
+
+        for (const [el, key] of [
+            [this.filterFormatEl, 'filterFormat'],
+            [this.filterSourceEl, 'filterSource'],
+            [this.filterDateEl,   'filterDate'],
+        ] as [HTMLSelectElement, string][]) {
+            el.addEventListener('change', async () => {
+                (this.plugin.settings as unknown as Record<string, string>)[key] = el.value
+                await this.plugin.saveSettings()
+                el.toggleClass('qc-filter-select--active', !!el.value)
+                this.updateFilterClear()
+                this.applyFilters()
+            })
+        }
+
+        this.updateFilterClear()
+    }
+
+    private createFilterSelect(
+        container: HTMLElement,
+        label: string,
+        options: { value: string; label: string }[],
+        current: string
+    ): HTMLSelectElement {
+        const wrap = container.createDiv('qc-filter-group')
+        wrap.createSpan({ cls: 'qc-filter-label', text: label })
+        const sel = wrap.createEl('select', { cls: 'qc-filter-select' })
+        for (const o of options) sel.createEl('option', { value: o.value, text: o.label })
+        sel.value = current
+        if (current) sel.addClass('qc-filter-select--active')
+        return sel
+    }
+
+    private updateFilterClear(): void {
+        if (!this.filterClearBtn) return
+        const { filterFormat, filterSource, filterDate } = this.plugin.settings
+        this.filterClearBtn.style.display = filterFormat || filterSource || filterDate ? '' : 'none'
+    }
+
+    private getFiltered(): ClipRef[] {
+        const { filterFormat, filterSource, filterDate } = this.plugin.settings
+        const now = Date.now()
+        const DAY = 86400000
+        return this.clips.filter(ref => {
+            if (filterFormat && ref.clip.clip_type !== filterFormat) return false
+            if (filterSource && ref.domain !== filterSource) return false
+            if (filterDate) {
+                const age = now - new Date(ref.clip.savedAt).getTime()
+                if (filterDate === 'today' && age > DAY) return false
+                if (filterDate === 'week'  && age > 7 * DAY) return false
+                if (filterDate === 'month' && age > 30 * DAY) return false
+            }
+            return true
+        })
+    }
+
+    private applyFilters(): void {
+        const wrap = this.contentEl.querySelector('.qc-manager-table-wrap') as HTMLElement | null
+        if (!wrap) return
+        wrap.empty()
+        const filtered = this.getFiltered()
+        if (filtered.length === 0) {
+            wrap.createDiv('qc-manager-empty').setText('No clips match the current filters.')
+        } else {
+            this.renderTable(wrap, filtered)
+        }
+        this.updateCount()
+    }
+
+    private updateCount(): void {
+        const countEl = this.contentEl.querySelector('.qc-manager-count')
+        if (!countEl) return
+        const total = this.clips.length
+        const filtered = this.getFiltered().length
+        countEl.textContent = filtered === total
+            ? `${total} clip${total !== 1 ? 's' : ''}`
+            : `${filtered} of ${total} clip${total !== 1 ? 's' : ''}`
     }
 
     private renderColumnPicker(container: HTMLElement): void {
@@ -152,7 +280,12 @@ export class ClipManagerView extends ItemView {
         const wrap = this.contentEl.querySelector('.qc-manager-table-wrap') as HTMLElement | null
         if (!wrap) return
         wrap.empty()
-        this.renderTable(wrap)
+        const filtered = this.getFiltered()
+        if (filtered.length === 0) {
+            wrap.createDiv('qc-manager-empty').setText('No clips match the current filters.')
+        } else {
+            this.renderTable(wrap, filtered)
+        }
     }
 
     private getOrderedColumns(): ColumnDef[] {
@@ -169,8 +302,8 @@ export class ClipManagerView extends ItemView {
         return this.plugin.settings.visibleColumns.includes(col.key)
     }
 
-    private renderTable(container: HTMLElement): void {
-        const sorted = this.getSorted()
+    private renderTable(container: HTMLElement, clips: ClipRef[]): void {
+        const sorted = this.sortClips(clips)
         const orderedCols = this.getOrderedColumns()
 
         const table = container.createEl('table', { cls: 'qc-table' })
@@ -278,8 +411,8 @@ export class ClipManagerView extends ItemView {
         })
     }
 
-    private getSorted(): ClipRef[] {
-        return [...this.clips].sort((a, b) => {
+    private sortClips(clips: ClipRef[]): ClipRef[] {
+        return [...clips].sort((a, b) => {
             let va: string, vb: string
             switch (this.sortKey) {
                 case 'saved_at':   va = a.clip.savedAt;    vb = b.clip.savedAt;    break
@@ -361,8 +494,7 @@ export class ClipManagerView extends ItemView {
                 this.clips = this.clips.filter(
                     c => !(c.url === ref.url && c.clip.hash === ref.clip.hash)
                 )
-                const countEl = this.contentEl.querySelector('.qc-manager-count')
-                if (countEl) countEl.textContent = `${this.clips.length} clip${this.clips.length !== 1 ? 's' : ''}`
+                this.updateCount()
                 new Notice('Clip deleted')
             } catch {
                 new Notice('Failed to delete clip')
