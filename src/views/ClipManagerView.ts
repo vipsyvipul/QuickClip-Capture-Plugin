@@ -181,9 +181,14 @@ export class ClipManagerView extends ItemView {
 
         if (this.clips.length === 0) {
             this.updateCount()
-            contentEl.createDiv('qc-manager-empty').setText(
-                'No clips yet. Start saving from the browser extension.'
-            )
+            const emptyEl = contentEl.createDiv('qc-manager-empty')
+            emptyEl.appendText('Nothing clipped yet. Install ')
+            emptyEl.createEl('a', {
+                text: 'QuickClip Capture',
+                href: 'https://chromewebstore.google.com/detail/quickclip/edabdpgppnhbogfpdghjekdalmipflel',
+                cls: 'external-link',
+            })
+            emptyEl.appendText(' extension for Chrome browser and start saving.')
             return
         }
 

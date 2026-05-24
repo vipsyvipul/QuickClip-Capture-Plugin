@@ -397,16 +397,12 @@ th[data-col-key="has_notes"] {
     padding: 2px 6px;
     border-radius: 4px;
     font-size: var(--font-ui-small);
-    opacity: 0;
+    opacity: 0.35;
     transition: opacity 80ms;
 }
 
-.qc-row:hover .qc-delete-btn {
-    opacity: 0.5;
-}
-
 .qc-delete-btn:hover {
-    opacity: 1 !important;
+    opacity: 1;
 }
 
 /* ── Filter Bar ─────────────────────────────────────────────── */
