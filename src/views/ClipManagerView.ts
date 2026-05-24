@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, TFile, Notice } from 'obsidian'
 import QuickClipCapturePlugin from '../main'
-import { loadIndex, getAllClips, deleteClip } from '../clipsIndex'
-import { ClipRef, Clip } from '../types'
+import { loadIndex, getAllClips, deleteClip, updateContentType, updateClipTags } from '../clipsIndex'
+import { ClipRef, Clip, ContentType } from '../types'
 
 export const VIEW_CLIP_MANAGER = 'quickclip-manager'
 
@@ -432,7 +432,7 @@ export class ClipManagerView extends ItemView {
         // Snippet — always first, linked to exact clip location
         const snippetTd = tr.createEl('td', { cls: 'qc-cell qc-cell--snippet' })
         const raw = ref.clip.text ?? CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type
-        const snippet = raw.length > 15 ? raw.slice(0, 15) + '…' : raw
+        const snippet = raw.length > 20 ? raw.slice(0, 20) + '…' : raw
         const snippetLink = snippetTd.createEl('a', { cls: 'qc-snippet-link', text: snippet })
         snippetLink.title = ref.clip.text ?? raw
         snippetLink.addEventListener('click', (e) => { e.preventDefault(); this.openClip(ref) })
@@ -449,9 +449,18 @@ export class ClipManagerView extends ItemView {
                     badge.setAttribute('aria-label', ref.clip.clip_type)
                     break
                 }
-                case 'content_type':
-                    if (ref.content_type) td.createSpan({ cls: 'qc-domain-chip', text: ref.content_type })
+                case 'content_type': {
+                    const sel = td.createEl('select', { cls: 'qc-content-type-select' })
+                    for (const ct of ['article', 'video', 'tweet', 'pdf', 'github'] as ContentType[]) {
+                        const opt = sel.createEl('option', { value: ct, text: ct })
+                        if (ct === ref.content_type) opt.selected = true
+                    }
+                    sel.addEventListener('change', async () => {
+                        ref.content_type = sel.value as ContentType
+                        await updateContentType(this.app, ref.url, ref.content_type)
+                    })
                     break
+                }
                 case 'page_title':
                     td.addClass('qc-cell--title')
                     td.textContent = ref.pageTitle ?? ''
@@ -465,9 +474,7 @@ export class ClipManagerView extends ItemView {
                     td.textContent = formatDate(ref.clip.savedAt)
                     break
                 case 'tags':
-                    for (const tag of (ref.clip.tags ?? [])) {
-                        td.createSpan({ cls: 'qc-tag-chip', text: tag })
-                    }
+                    this.renderEditableTags(td, ref)
                     break
                 case 'path':
                     td.addClass('qc-cell--path')
@@ -502,6 +509,51 @@ export class ClipManagerView extends ItemView {
                 deleteBtn.setText('✕')
             }
         })
+    }
+
+    private renderEditableTags(td: HTMLElement, ref: ClipRef): void {
+        const allTags = [...new Set(this.clips.flatMap(r => r.clip.tags ?? []))].sort()
+        const listId = `qc-tags-${ref.clip.hash}`
+
+        const rebuild = () => {
+            td.empty()
+            for (const tag of (ref.clip.tags ?? [])) {
+                const chip = td.createSpan({ cls: 'qc-tag-chip qc-tag-editable' })
+                chip.createSpan({ text: tag })
+                const btn = chip.createEl('button', { cls: 'qc-tag-remove', text: '×' })
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation()
+                    ref.clip.tags = (ref.clip.tags ?? []).filter(t => t !== tag)
+                    await updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags)
+                    rebuild()
+                })
+            }
+            const dl = td.createEl('datalist', { attr: { id: listId } })
+            for (const t of allTags) dl.createEl('option', { value: t })
+            const input = td.createEl('input', {
+                cls: 'qc-tag-input',
+                attr: { list: listId, placeholder: 'Add...', 'aria-label': 'Add tag' },
+            })
+            input.addEventListener('keydown', async (e: KeyboardEvent) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const val = input.value.trim()
+                if (!val || (ref.clip.tags ?? []).includes(val)) { input.value = ''; return }
+                ref.clip.tags = [...(ref.clip.tags ?? []), val]
+                await updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags)
+                input.value = ''
+                rebuild()
+            })
+            input.addEventListener('change', async () => {
+                const val = input.value.trim()
+                if (!val || (ref.clip.tags ?? []).includes(val)) { input.value = ''; return }
+                ref.clip.tags = [...(ref.clip.tags ?? []), val]
+                await updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags)
+                input.value = ''
+                rebuild()
+            })
+        }
+        rebuild()
     }
 
     private async openClip(ref: ClipRef): Promise<void> {

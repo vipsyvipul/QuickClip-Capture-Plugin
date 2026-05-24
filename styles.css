@@ -326,6 +326,59 @@ td.qc-col-drag-after  { border-right: 2px solid var(--interactive-accent); }
     white-space: nowrap;
 }
 
+.qc-tag-editable {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 12px;
+    padding: 2px 6px 2px 8px;
+}
+
+.qc-tag-remove {
+    all: unset;
+    background: transparent !important;
+    box-shadow: none !important;
+    cursor: pointer;
+    font-size: 0.8em;
+    line-height: 1;
+    opacity: 0.5;
+    color: inherit;
+}
+
+.qc-tag-remove:hover { opacity: 1; }
+
+.qc-tag-input {
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    font-size: 0.85em;
+    outline: none;
+    padding: 2px 0;
+    width: 100%;
+    display: block;
+    margin-top: 2px;
+}
+
+.qc-tag-input:focus {
+    color: var(--text-muted);
+}
+
+.qc-content-type-select {
+    background: var(--background-modifier-hover);
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: inherit;
+    padding: 1px 4px;
+}
+
+.qc-content-type-select:hover,
+.qc-content-type-select:focus {
+    border-color: var(--background-modifier-border);
+    outline: none;
+}
+
 .qc-delete-btn {
     background: none;
     border: none;

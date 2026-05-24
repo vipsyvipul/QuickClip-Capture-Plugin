@@ -1,5 +1,5 @@
 import { App, TFile } from 'obsidian'
-import { ClipsIndex, ClipRef, Clip } from './types'
+import { ClipsIndex, ClipRef, Clip, ContentType } from './types'
 
 const INDEX_PATH = '.quickclip/clipsHistory.json'
 
@@ -50,6 +50,101 @@ export async function deleteClip(app: App, url: string, hash: string): Promise<v
     } else {
         await removeHighlightFromFile(app, clip)
     }
+}
+
+export async function updateContentType(app: App, url: string, contentType: ContentType): Promise<void> {
+    const index = await loadIndex(app)
+    if (index[url]) {
+        index[url].content_type = contentType
+        await saveIndex(app, index)
+    }
+}
+
+export async function updateClipTags(app: App, url: string, hash: string, tags: string[]): Promise<void> {
+    const index = await loadIndex(app)
+    const entry = index[url]
+    if (!entry) return
+    const clip = entry.clips.find(c => c.hash === hash)
+    if (!clip) return
+    clip.tags = tags
+    await saveIndex(app, index)
+    await updateTagsInFile(app, clip, tags)
+}
+
+async function updateTagsInFile(app: App, clip: Clip, tags: string[]): Promise<void> {
+    const file = app.vault.getAbstractFileByPath(clip.path)
+    if (!(file instanceof TFile)) return
+
+    if (clip.clip_type === 'full-page') {
+        await updateFullPageTags(app, file, tags)
+    } else {
+        await updateHighlightTags(app, file, clip, tags)
+    }
+}
+
+async function updateFullPageTags(app: App, file: TFile, tags: string[]): Promise<void> {
+    const content = await app.vault.read(file)
+    const lines = content.split('\n')
+    if (lines[0] !== '---') return
+    const fmEnd = lines.indexOf('---', 1)
+    if (fmEnd === -1) return
+
+    const tagsLine = tags.length
+        ? `tags: [${tags.map(t => t.replace(/^#/, '')).join(', ')}]`
+        : null
+    const tagsIdx = lines.findIndex((l, i) => i > 0 && i < fmEnd && l.startsWith('tags:'))
+
+    let newLines: string[]
+    if (tagsIdx !== -1) {
+        if (tagsLine) {
+            newLines = [...lines]; newLines[tagsIdx] = tagsLine
+        } else {
+            newLines = lines.filter((_, i) => i !== tagsIdx)
+        }
+    } else if (tagsLine) {
+        const clippedIdx = lines.findIndex((l, i) => i > 0 && i < fmEnd && l.startsWith('clipped:'))
+        const insertAt = clippedIdx !== -1 ? clippedIdx + 1 : fmEnd
+        newLines = [...lines.slice(0, insertAt), tagsLine, ...lines.slice(insertAt)]
+    } else {
+        return
+    }
+
+    await app.vault.modify(file, newLines.join('\n'))
+}
+
+async function updateHighlightTags(app: App, file: TFile, clip: Clip, tags: string[]): Promise<void> {
+    const content = await app.vault.read(file)
+    const lines = content.split('\n')
+
+    const date = new Date(clip.savedAt)
+    const capturedStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+    const capturedIdx = lines.findIndex(l => l.includes(`| Captured | ${capturedStr} |`))
+    if (capturedIdx === -1) return
+
+    let blockEnd = lines.length
+    for (let i = capturedIdx + 1; i < lines.length; i++) {
+        if (lines[i] === '---') { blockEnd = i; break }
+    }
+
+    const tagsIdx = lines.findIndex((l, i) => i > capturedIdx && i < blockEnd && l.startsWith('| Tags |'))
+    const tagsLine = tags.length
+        ? `| Tags | ${tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ')} |`
+        : null
+
+    let newLines: string[]
+    if (tagsIdx !== -1) {
+        if (tagsLine) {
+            newLines = [...lines]; newLines[tagsIdx] = tagsLine
+        } else {
+            newLines = lines.filter((_, i) => i !== tagsIdx)
+        }
+    } else if (tagsLine) {
+        newLines = [...lines.slice(0, capturedIdx + 1), tagsLine, ...lines.slice(capturedIdx + 1)]
+    } else {
+        return
+    }
+
+    await app.vault.modify(file, newLines.join('\n'))
 }
 
 async function removeHighlightFromFile(app: App, clip: Clip): Promise<void> {
