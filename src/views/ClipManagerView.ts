@@ -42,6 +42,8 @@ export class ClipManagerView extends ItemView {
     private sortKey: SortKey = 'saved_at'
     private sortDir: SortDir = 'desc'
     private colPickerClose: (() => void) | null = null
+    private snippetCache = new Map<string, string>()
+    private snippetRefreshTimer: ReturnType<typeof setTimeout> | null = null
 
     constructor(leaf: WorkspaceLeaf, plugin: QuickClipCapturePlugin) {
         super(leaf)
@@ -54,9 +56,21 @@ export class ClipManagerView extends ItemView {
 
     async onOpen(): Promise<void> {
         this.registerEvent(
-            this.app.vault.on('modify', (file) => {
-                if (file instanceof TFile && file.path === '.quickclip/clipsHistory.json')
-                    this.refresh()
+            this.app.vault.on('modify', async (file) => {
+                if (!(file instanceof TFile)) return
+                if (file.path === '.quickclip/clipsHistory.json') {
+                    await this.refresh()
+                    return
+                }
+                if (this.snippetRefreshTimer) clearTimeout(this.snippetRefreshTimer)
+                this.snippetRefreshTimer = setTimeout(async () => {
+                    this.snippetRefreshTimer = null
+                    const affected = this.clips.filter(ref => ref.clip.path === file.path)
+                    if (affected.length === 0) return
+                    for (const ref of affected) this.snippetCache.delete(ref.clip.hash)
+                    await Promise.all(affected.map(ref => this.loadSnippet(ref)))
+                    this.renderTableOnly()
+                }, 500)
             })
         )
         await this.refresh()
@@ -67,12 +81,59 @@ export class ClipManagerView extends ItemView {
             document.removeEventListener('click', this.colPickerClose)
             this.colPickerClose = null
         }
+        if (this.snippetRefreshTimer) {
+            clearTimeout(this.snippetRefreshTimer)
+            this.snippetRefreshTimer = null
+        }
     }
 
     async refresh(): Promise<void> {
         const index = await loadIndex(this.app)
         this.clips = getAllClips(index)
+        await Promise.all(
+            this.clips
+                .filter(ref => !ref.clip.text && !this.snippetCache.has(ref.clip.hash))
+                .map(ref => this.loadSnippet(ref))
+        )
         this.render()
+    }
+
+    private async loadSnippet(ref: ClipRef): Promise<void> {
+        if (!ref.clip.path) return
+        const file = this.app.vault.getAbstractFileByPath(ref.clip.path)
+        if (!(file instanceof TFile)) return
+        const content = await this.app.vault.read(file)
+
+        let snippet = ''
+        if (ref.clip.clip_type === 'full-page') {
+            const bodyStart = content.indexOf('\n---\n', 4)
+            const body = bodyStart !== -1 ? content.slice(bodyStart + 5) : content
+            for (const line of body.split('\n')) {
+                const t = line.replace(/^#+\s*/, '').replace(/^>\s*/, '').trim()
+                if (t && !t.startsWith('[!') && !t.startsWith('|') && !t.startsWith('!')) {
+                    snippet = t; break
+                }
+            }
+        } else {
+            const date = new Date(ref.clip.savedAt)
+            const capturedStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+            const lines = content.split('\n')
+            const capturedIdx = lines.findIndex(l => l.includes(`| Captured | ${capturedStr} |`))
+            if (capturedIdx !== -1) {
+                for (let i = capturedIdx - 1; i >= 0; i--) {
+                    if (lines[i].startsWith('> [!quote]')) {
+                        const quoteLines: string[] = []
+                        for (let j = i + 1; j < capturedIdx; j++) {
+                            if (lines[j].startsWith('> ') && !lines[j].startsWith('> [!'))
+                                quoteLines.push(lines[j].slice(2).trim())
+                        }
+                        snippet = quoteLines.join(' ').trim()
+                        break
+                    }
+                }
+            }
+        }
+        if (snippet) this.snippetCache.set(ref.clip.hash, snippet)
     }
 
     private render(): void {
@@ -431,7 +492,7 @@ export class ClipManagerView extends ItemView {
 
         // Snippet — always first, linked to exact clip location
         const snippetTd = tr.createEl('td', { cls: 'qc-cell qc-cell--snippet' })
-        const raw = ref.clip.text ?? CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type
+        const raw = ref.clip.text ?? this.snippetCache.get(ref.clip.hash) ?? CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type
         const snippet = raw.length > 20 ? raw.slice(0, 20) + '…' : raw
         const snippetLink = snippetTd.createEl('a', { cls: 'qc-snippet-link', text: snippet })
         snippetLink.title = ref.clip.text ?? raw
