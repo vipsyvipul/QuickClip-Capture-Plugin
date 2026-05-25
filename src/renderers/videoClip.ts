@@ -38,6 +38,36 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
         })
         table.parentElement!.insertBefore(wrap, table)
         transformTable(table, iframe, parsed.platform)
+
+        // Both YouTube and Vimeo report errors via postMessage — handle for both
+        const platform = parsed.platform
+        const watchLabel = platform === 'vimeo' ? 'Watch on Vimeo ↗' : 'Watch on YouTube ↗'
+        const onMessage = (e: MessageEvent) => {
+            if (e.source !== iframe.contentWindow) return
+            let data: any
+            try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
+
+            let errorInfo: { title: string; sub: string } | null = null
+            if (platform === 'youtube' && data?.event === 'onError') {
+                errorInfo = youtubeErrorText(data.info)
+            } else if (platform === 'vimeo' && data?.event === 'error') {
+                errorInfo = vimeoErrorText(data?.data?.name ?? '')
+            }
+            if (!errorInfo) return
+
+            window.removeEventListener('message', onMessage)
+            wrap.innerHTML = ''
+            wrap.addClass('qc-video-wrap--blocked')
+            const inner = wrap.createDiv({ cls: 'qc-embed-blocked' })
+            inner.createEl('span', { cls: 'qc-embed-blocked-title', text: errorInfo.title })
+            inner.createEl('span', { cls: 'qc-embed-blocked-sub', text: errorInfo.sub })
+            inner.createEl('a', {
+                cls: 'qc-video-fallback-link',
+                text: watchLabel,
+                attr: { href: url, target: '_blank', rel: 'noopener' },
+            })
+        }
+        window.addEventListener('message', onMessage)
     } else {
         // Unsupported platform — show a link instead of a broken iframe
         const hostname = safeHostname(url)
@@ -123,6 +153,26 @@ function seekVideo(iframe: HTMLIFrameElement, platform: KnownPlatform, seconds: 
         iframe.contentWindow?.postMessage(JSON.stringify({ method: 'setCurrentTime', value: seconds }), '*')
     } else {
         iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [seconds, true] }), '*')
+    }
+}
+
+function vimeoErrorText(name: string): { title: string; sub: string } {
+    switch (name) {
+        case 'NotFound':     return { title: 'Video not found', sub: 'This video may have been deleted or doesn\'t exist.' }
+        case 'PrivacyError': return { title: 'Private video', sub: 'This video is private.' }
+        case 'NotAllowed':   return { title: 'Embedding disabled', sub: 'The owner has restricted playback on external sites.' }
+        default:             return { title: 'Video unavailable', sub: 'Vimeo returned a playback error.' }
+    }
+}
+
+function youtubeErrorText(code: number): { title: string; sub: string } {
+    switch (code) {
+        case 2:   return { title: 'Broken video link', sub: 'The video ID in this clip\'s URL is invalid.' }
+        case 5:   return { title: 'Playback error', sub: 'This video can\'t be played in the browser.' }
+        case 100: return { title: 'Video unavailable', sub: 'This video may have been deleted or set to private.' }
+        case 101:
+        case 150: return { title: 'Embedding disabled', sub: 'The owner has disabled playback on external sites.' }
+        default:  return { title: 'Video unavailable', sub: `YouTube returned an error (code ${code}).` }
     }
 }
 
