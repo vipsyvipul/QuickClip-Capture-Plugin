@@ -1,25 +1,30 @@
-import { MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian'
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian'
+import { loadIndex, deleteClip } from '../clipsIndex'
 
-export function processHighlight(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
+export function processHighlight(app: App, el: HTMLElement, ctx: MarkdownPostProcessorContext, confirmDelete: () => boolean): void {
     if (el.closest('.cm-editor')) return
     if (!el.querySelector('[data-callout="quote"]')) return
-    ctx.addChild(new HighlightScanner(el))
+    ctx.addChild(new HighlightScanner(el, app, ctx.sourcePath, confirmDelete))
 }
 
 class HighlightScanner extends MarkdownRenderChild {
+    constructor(el: HTMLElement, private app: App, private sourcePath: string, private confirmDelete: () => boolean) {
+        super(el)
+    }
+
     onload(): void {
         const tryTransform = () => {
             if (!this.containerEl.parentElement) {
                 requestAnimationFrame(tryTransform)
                 return
             }
-            transformSection(this.containerEl)
+            transformSection(this.app, this.sourcePath, this.confirmDelete, this.containerEl)
         }
         tryTransform()
     }
 }
 
-function transformSection(calloutSection: HTMLElement): void {
+function transformSection(app: App, sourcePath: string, confirmDelete: () => boolean, calloutSection: HTMLElement): void {
     if (calloutSection.querySelector('.qc-highlight-card')) return
 
     const callout = calloutSection.querySelector<HTMLElement>('[data-callout="quote"]')
@@ -38,21 +43,26 @@ function transformSection(calloutSection: HTMLElement): void {
     const prevSection = calloutSection.previousElementSibling as HTMLElement | null
     const noteSection = prevSection?.querySelector('[data-callout="note"]') ? prevSection : null
 
-    buildCard(calloutSection, tableSection, callout, table as HTMLTableElement, noteSection)
+    buildCard(app, sourcePath, confirmDelete, calloutSection, tableSection, callout, table as HTMLTableElement, noteSection)
 }
 
 // Called from main.ts on active-leaf-change to re-apply after Obsidian cache resets
-export function scanAndTransform(container: HTMLElement): void {
+export function scanAndTransform(app: App, container: HTMLElement, sourcePath: string, confirmDelete: () => boolean): void {
     const sections = Array.from(container.querySelectorAll('[data-callout="quote"]'))
     sections.forEach(callout => {
         const section = callout.closest('.el-div, .el-blockquote, div') as HTMLElement | null
         if (section && section.parentElement === container) {
-            transformSection(section)
+            transformSection(app, sourcePath, confirmDelete, section)
         }
     })
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 function buildCard(
+    app: App,
+    sourcePath: string,
+    confirmDelete: () => boolean,
     calloutSection: HTMLElement,
     tableSection: HTMLElement,
     callout: HTMLElement,
@@ -133,12 +143,48 @@ function buildCard(
         actionsEl.appendChild(link)
     }
 
+    const rightGroup = document.createElement('div')
+    rightGroup.className = 'qc-highlight-actions-right'
+
     if (captured) {
         const capturedEl = document.createElement('span')
         capturedEl.className = 'qc-captured'
         capturedEl.textContent = captured
-        actionsEl.appendChild(capturedEl)
+        rightGroup.appendChild(capturedEl)
     }
+
+    if (viewHref) {
+        const deleteBtn = document.createElement('button')
+        deleteBtn.className = 'qc-delete-btn qc-card-delete-btn'
+        deleteBtn.textContent = '×'
+        deleteBtn.title = 'Delete clip'
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation()
+            if (confirmDelete() && !window.confirm('Delete this clip?')) return
+            const index = await loadIndex(app)
+            // Find clip by file path + captured date — more reliable than URL matching
+            let matchUrl = ''
+            let match = null
+            for (const [url, entry] of Object.entries(index)) {
+                const clip = entry.clips.find(c => {
+                    const d = new Date(c.savedAt)
+                    const fmt = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+                    return fmt === captured && c.path === sourcePath
+                })
+                if (clip) { matchUrl = url; match = clip; break }
+            }
+            if (!match) return
+            await deleteClip(app, matchUrl, match.hash)
+            const sep = tableSection.nextElementSibling
+            noteSection?.remove()
+            calloutSection.remove()
+            tableSection.remove()
+            if (sep?.tagName === 'HR') sep.remove()
+        })
+        rightGroup.appendChild(deleteBtn)
+    }
+
+    actionsEl.appendChild(rightGroup)
 
     footer.appendChild(sep2)
     footer.appendChild(actionsEl)

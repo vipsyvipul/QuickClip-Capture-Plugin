@@ -208,12 +208,13 @@ async function removeHighlightFromFile(app: App, clip: Clip): Promise<void> {
 function removeOrphanedHeadings(content: string): string {
     const lines = content.split('\n')
     const toRemove = new Set<number>()
+    const isHeading = (l: string) => /^#{1,6} /.test(l)
 
     for (let i = 0; i < lines.length; i++) {
-        if (!lines[i].startsWith('# ')) continue
+        if (!isHeading(lines[i])) continue
         // Find where the next heading starts (or EOF)
         let j = i + 1
-        while (j < lines.length && !lines[j].startsWith('# ')) j++
+        while (j < lines.length && !isHeading(lines[j])) j++
         // Heading is orphaned if everything between it and the next heading is blank
         const hasContent = lines.slice(i + 1, j).some(l => l.trim() !== '')
         if (!hasContent) toRemove.add(i)

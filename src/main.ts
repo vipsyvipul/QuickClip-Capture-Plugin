@@ -45,7 +45,7 @@ export default class QuickClipCapturePlugin extends Plugin {
         )
 
         this.registerMarkdownPostProcessor((el, ctx) => {
-            processHighlight(el, ctx)
+            processHighlight(this.app, el, ctx, () => this.settings.confirmDelete)
             processFullPage(this.app, el, ctx)
         })
 
@@ -59,7 +59,7 @@ export default class QuickClipCapturePlugin extends Plugin {
 
                 setTimeout(() => {
                     const section = view.containerEl.querySelector('.markdown-preview-section')
-                    if (section) scanAndTransform(section as HTMLElement)
+                    if (section) scanAndTransform(this.app, section as HTMLElement, view.file?.path ?? '', () => this.settings.confirmDelete)
                     injectFullPageHeader(this.app, view.containerEl, view.file?.path ?? '')
                     injectVideoClipView(this.app, view.containerEl, view.file?.path ?? '')
                 }, 100)
