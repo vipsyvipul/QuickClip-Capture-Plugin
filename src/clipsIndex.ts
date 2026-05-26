@@ -46,12 +46,8 @@ export async function deleteClip(app: App, url: string, hash: string): Promise<v
         const file = app.vault.getAbstractFileByPath(clip.path)
         if (file instanceof TFile) await app.vault.delete(file)
     } else if (clip.clip_type === 'video-clip') {
-        if (isLastClip) {
-            const file = app.vault.getAbstractFileByPath(clip.path)
-            if (file instanceof TFile) await app.vault.delete(file)
-        } else {
-            await removeVideoClipRow(app, clip)
-        }
+        // Never delete the video file — the embed and table structure should remain
+        await removeVideoClipRow(app, clip)
     } else {
         // highlight, pdf-highlight, tweet, image — all appended callout blocks
         await removeHighlightFromFile(app, clip)

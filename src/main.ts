@@ -61,7 +61,7 @@ export default class QuickClipCapturePlugin extends Plugin {
                     const section = view.containerEl.querySelector('.markdown-preview-section')
                     if (section) scanAndTransform(this.app, section as HTMLElement, view.file?.path ?? '', () => this.settings.confirmDelete)
                     injectFullPageHeader(this.app, view.containerEl, view.file?.path ?? '')
-                    injectVideoClipView(this.app, view.containerEl, view.file?.path ?? '')
+                    injectVideoClipView(this.app, view.containerEl, view.file?.path ?? '', () => this.settings.confirmDelete)
                 }, 100)
             })
         )
@@ -71,7 +71,7 @@ export default class QuickClipCapturePlugin extends Plugin {
             this.app.workspace.on('layout-change', () => {
                 const view = this.app.workspace.getActiveViewOfType(MarkdownView)
                 if (!view || view.getMode() !== 'preview') return
-                injectVideoClipView(this.app, view.containerEl, view.file?.path ?? '')
+                injectVideoClipView(this.app, view.containerEl, view.file?.path ?? '', () => this.settings.confirmDelete)
             })
         )
 

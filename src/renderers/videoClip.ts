@@ -1,9 +1,12 @@
 import { App, TFile } from 'obsidian'
+import { loadIndex, deleteClip } from '../clipsIndex'
 
 type KnownPlatform = 'youtube' | 'vimeo'
 interface ParsedVideo { platform: KnownPlatform; videoId: string }
 
-export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath: string): void {
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath: string, confirmDelete: () => boolean): void {
     if (!filePath) return
     const tfile = app.vault.getAbstractFileByPath(filePath)
     if (!(tfile instanceof TFile)) return
@@ -20,7 +23,7 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
 
     const table = Array.from(section.querySelectorAll('table')).find(
         t => t.querySelector('th')?.textContent?.trim().toLowerCase() === 'time'
-    )
+    ) as HTMLTableElement | undefined
     if (!table) return
 
     const wrap = createDiv({ cls: 'qc-video-wrap' })
@@ -37,9 +40,8 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
             },
         })
         table.parentElement!.insertBefore(wrap, table)
-        transformTable(table, iframe, parsed.platform)
+        transformTable(app, containerEl, table, filePath, url, confirmDelete, iframe, parsed.platform)
 
-        // Both YouTube and Vimeo report errors via postMessage — handle for both
         const platform = parsed.platform
         const watchLabel = platform === 'vimeo' ? 'Watch on Vimeo ↗' : 'Watch on YouTube ↗'
         const onMessage = (e: MessageEvent) => {
@@ -69,7 +71,6 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
         }
         window.addEventListener('message', onMessage)
     } else {
-        // Unsupported platform — show a link instead of a broken iframe
         const hostname = safeHostname(url)
         wrap.addClass('qc-video-wrap--fallback')
         wrap.createEl('a', {
@@ -78,16 +79,22 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
             attr: { href: url, target: '_blank', rel: 'noopener' },
         })
         table.parentElement!.insertBefore(wrap, table)
-        transformTable(table, null, null, url)
+        transformTable(app, containerEl, table, filePath, url, confirmDelete, null, null)
     }
 }
 
 function transformTable(
+    app: App,
+    containerEl: HTMLElement,
     table: HTMLTableElement,
+    filePath: string,
+    videoUrl: string,
+    confirmDelete: () => boolean,
     iframe: HTMLIFrameElement | null,
     platform: KnownPlatform | null,
-    fallbackUrl?: string
 ): void {
+    table.addClass('qc-video-table')
+
     const headers = Array.from(table.querySelectorAll('th')).map(
         th => th.textContent?.trim().toLowerCase() ?? ''
     )
@@ -95,15 +102,71 @@ function transformTable(
     const timelineIdx = headers.indexOf('clip timeline')
     const tagsIdx     = headers.indexOf('tags')
 
-    for (const row of Array.from(table.querySelectorAll('tbody tr'))) {
+    // Add Delete + sort headers
+    const headerRow = table.querySelector('thead tr') ?? table.querySelector('tr')
+    let timeTh: HTMLElement | null = null
+    let timelineTh: HTMLElement | null = null
+    if (headerRow) {
+        const ths = Array.from(headerRow.querySelectorAll('th'))
+        timeTh = ths[timeIdx] ?? null
+        timelineTh = ths[timelineIdx] ?? null
+        headerRow.createEl('th', { cls: 'qc-th-delete', text: 'Delete' })
+    }
+
+    // Track sort state
+    let sortCol: 'time' | 'timeline' | null = null
+    let sortAsc = true
+
+    function sortRows(col: 'time' | 'timeline') {
+        if (sortCol === col) sortAsc = !sortAsc
+        else { sortCol = col; sortAsc = true }
+
+        const tbody = table.querySelector('tbody')
+        if (!tbody) return
+        const rows = Array.from(tbody.querySelectorAll<HTMLTableRowElement>('tr'))
+        rows.sort((a, b) => {
+            const av = col === 'time'
+                ? parseFloat(a.dataset.sortTime ?? '0')
+                : parseFloat(a.dataset.sortTimeline ?? '0')
+            const bv = col === 'time'
+                ? parseFloat(b.dataset.sortTime ?? '0')
+                : parseFloat(b.dataset.sortTimeline ?? '0')
+            return sortAsc ? av - bv : bv - av
+        })
+        rows.forEach(r => tbody.appendChild(r))
+
+        // Update header indicators
+        ;[timeTh, timelineTh].forEach(th => { th?.classList.remove('qc-sorted'); th?.removeAttribute('data-sort-dir') })
+        const activeTh = col === 'time' ? timeTh : timelineTh
+        activeTh?.classList.add('qc-sorted')
+        activeTh?.setAttribute('data-sort-dir', sortAsc ? 'asc' : 'desc')
+    }
+
+    if (timeTh) {
+        timeTh.classList.add('qc-sortable')
+        timeTh.addEventListener('click', () => sortRows('time'))
+    }
+    if (timelineTh) {
+        timelineTh.classList.add('qc-sortable')
+        timelineTh.addEventListener('click', () => sortRows('timeline'))
+    }
+
+    for (const row of Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr'))) {
         const cells = Array.from(row.querySelectorAll('td'))
+
+        // Store raw timeline for delete matching and sort
+        const rawTimeline = timelineIdx >= 0 && cells[timelineIdx]
+            ? cells[timelineIdx].textContent?.trim() ?? ''
+            : ''
+        row.dataset.sortTimeline = String(parseClipDate(rawTimeline))
 
         if (timeIdx >= 0 && cells[timeIdx]) {
             const link = cells[timeIdx].querySelector('a')
             const seconds = link ? extractSeconds(link.href, platform) : NaN
             const label = link?.textContent?.trim() ?? ''
+            row.dataset.sortTime = String(isNaN(seconds) ? 0 : seconds)
             cells[timeIdx].empty()
-            if (!isNaN(seconds) && (iframe || fallbackUrl)) {
+            if (!isNaN(seconds) && (iframe || videoUrl)) {
                 const chip = cells[timeIdx].createEl('span', {
                     cls: 'qc-timestamp-chip',
                     text: `▶ ${label}`,
@@ -111,7 +174,7 @@ function transformTable(
                 })
                 chip.addEventListener('click', () => {
                     if (iframe && platform) seekVideo(iframe, platform, seconds)
-                    else if (fallbackUrl) window.open(fallbackUrl, '_blank')
+                    else window.open(videoUrl, '_blank')
                 })
             } else if (link) {
                 cells[timeIdx].appendChild(link.cloneNode(true))
@@ -119,8 +182,7 @@ function transformTable(
         }
 
         if (timelineIdx >= 0 && cells[timelineIdx]) {
-            const raw = cells[timelineIdx].textContent?.trim() ?? ''
-            if (raw) cells[timelineIdx].textContent = formatClipDate(raw)
+            if (rawTimeline) cells[timelineIdx].textContent = formatClipDate(rawTimeline)
         }
 
         if (tagsIdx >= 0 && cells[tagsIdx]) {
@@ -132,7 +194,51 @@ function transformTable(
                 })
             }
         }
+
+        // Delete button
+        const deleteTd = row.createEl('td', { cls: 'qc-cell qc-cell--delete' })
+        const deleteBtn = deleteTd.createEl('button', {
+            cls: 'qc-delete-btn qc-card-delete-btn',
+            text: '×',
+            attr: { title: 'Delete clip' },
+        })
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation()
+            if (confirmDelete() && !window.confirm('Delete this clip?')) return
+            const index = await loadIndex(app)
+            let matchUrl = ''
+            let matchHash = ''
+            outer: for (const [url, entry] of Object.entries(index)) {
+                for (const clip of entry.clips) {
+                    if (clip.path === filePath && fmtTimeline(clip.savedAt) === rawTimeline) {
+                        matchUrl = url
+                        matchHash = clip.hash
+                        break outer
+                    }
+                }
+            }
+            if (!matchHash) return
+            await deleteClip(app, matchUrl, matchHash)
+            row.remove()
+            // Obsidian re-renders the file after vault.modify — re-inject the video once it settles
+            setTimeout(() => injectVideoClipView(app, containerEl, filePath, confirmDelete), 300)
+        })
     }
+}
+
+// Format savedAt to match DOM-rendered "Clip Timeline" text: "26 May 2026 | 15:30"
+function fmtTimeline(savedAt: string): string {
+    const d = new Date(savedAt)
+    return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()} | ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+}
+
+// Parse Clip Timeline text to a Unix timestamp for sorting
+function parseClipDate(raw: string): number {
+    const m = raw.match(/(\d{1,2})\s+(\w+)\s+(\d{4})\s*\|\s*(\d{2}):(\d{2})/)
+    if (!m) return 0
+    const monthIdx = MONTHS.indexOf(m[2])
+    if (monthIdx === -1) return 0
+    return new Date(parseInt(m[3]), monthIdx, parseInt(m[1]), parseInt(m[4]), parseInt(m[5])).getTime()
 }
 
 function parseVideoUrl(url: string): ParsedVideo | null {
@@ -186,7 +292,6 @@ function extractSeconds(href: string, platform: KnownPlatform | null): number {
             const m = href.match(/#t=(\d+)s?/)
             return m ? parseInt(m[1], 10) : NaN
         }
-        // YouTube: &t=N
         const t = new URL(href).searchParams.get('t')
         return t ? parseInt(t, 10) : NaN
     } catch { return NaN }
@@ -194,14 +299,6 @@ function extractSeconds(href: string, platform: KnownPlatform | null): number {
 
 function safeHostname(url: string): string {
     try { return new URL(url).hostname } catch { return url }
-}
-
-function formatSeconds(s: number): string {
-    const h = Math.floor(s / 3600)
-    const m = Math.floor((s % 3600) / 60)
-    const sec = s % 60
-    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-    return `${m}:${String(sec).padStart(2, '0')}`
 }
 
 // Clip Timeline cell contains "26 May 2026 | 15:30" — reformat to "26 May · 15:30"
