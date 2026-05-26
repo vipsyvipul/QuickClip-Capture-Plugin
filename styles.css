@@ -351,7 +351,7 @@ th[data-col-key="has_notes"] {
     height: 11px;
 }
 
-.qc-badge-highlight    { background: rgba(var(--color-accent-rgb), 0.15); color: var(--interactive-accent); }
+.qc-badge-highlight    { background: color-mix(in srgb, var(--interactive-accent) 15%, transparent); color: var(--interactive-accent); }
 .qc-badge-full-page    { background: rgba(72, 130, 200, 0.15); color: #4882c8; }
 .qc-badge-transcript   { background: rgba(200, 100, 72, 0.15); color: #c86448; }
 .qc-badge-tweet        { background: rgba(72, 180, 200, 0.15); color: #48b4c8; }
