@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian'
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, setIcon } from 'obsidian'
 import { loadIndex, deleteClip } from '../clipsIndex'
 
 export function processHighlight(app: App, el: HTMLElement, ctx: MarkdownPostProcessorContext, confirmDelete: () => boolean): void {
@@ -59,6 +59,10 @@ export function scanAndTransform(app: App, container: HTMLElement, sourcePath: s
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+function safeDecode(s: string): string {
+    try { return decodeURIComponent(s) } catch { return s }
+}
+
 function buildCard(
     app: App,
     sourcePath: string,
@@ -73,8 +77,12 @@ function buildCard(
     if (!contentEl) return
 
     let viewHref = ''
+    let sourceHref = ''
+    let sourceLabel = ''
+    let pageNum = ''
     let captured = ''
     const tags: string[] = []
+    let isPdf = false
 
     for (const row of Array.from(table.querySelectorAll('tr'))) {
         const key = row.cells[0]?.textContent?.trim() ?? ''
@@ -82,6 +90,17 @@ function buildCard(
 
         if (key === 'Open') {
             viewHref = valueCell?.querySelector('a')?.href ?? ''
+        } else if (key === 'Source') {
+            isPdf = true
+            const link = valueCell?.querySelector('a')
+            if (link) {
+                sourceHref = link.href
+                sourceLabel = safeDecode(link.textContent?.trim() ?? '')
+            } else {
+                sourceLabel = safeDecode(valueCell?.textContent?.trim() ?? '')
+            }
+        } else if (key === 'Page') {
+            pageNum = valueCell?.textContent?.trim() ?? ''
         } else if (key === 'Captured') {
             captured = (valueCell?.textContent?.trim() ?? '').replace(' | ', ' · ')
         } else if (key === 'Tags') {
@@ -133,15 +152,51 @@ function buildCard(
     const actionsEl = document.createElement('div')
     actionsEl.className = 'qc-highlight-actions'
 
-    if (viewHref) {
+    // Left group: badge + source link + optional page number
+    const leftGroup = document.createElement('div')
+    leftGroup.className = 'qc-highlight-actions-left'
+
+    const badge = document.createElement('span')
+    badge.className = `qc-clip-badge ${isPdf ? 'qc-badge-pdf-highlight' : 'qc-badge-highlight'}`
+    const iconEl = document.createElement('span')
+    iconEl.className = 'qc-badge-icon'
+    setIcon(iconEl, isPdf ? 'file-text' : 'highlighter')
+    badge.appendChild(iconEl)
+    badge.appendChild(document.createTextNode(isPdf ? 'PDF' : 'Highlight'))
+    leftGroup.appendChild(badge)
+
+    if (isPdf) {
+        if (sourceHref) {
+            const link = document.createElement('a')
+            link.href = sourceHref
+            link.className = 'qc-view-link external-link'
+            link.textContent = sourceLabel || 'Open PDF ↗'
+            link.target = '_blank'
+            link.rel = 'noopener'
+            leftGroup.appendChild(link)
+        } else if (sourceLabel) {
+            const localEl = document.createElement('span')
+            localEl.className = 'qc-captured'
+            localEl.textContent = sourceLabel
+            leftGroup.appendChild(localEl)
+        }
+        if (pageNum) {
+            const pageEl = document.createElement('span')
+            pageEl.className = 'qc-pdf-page'
+            pageEl.textContent = `p. ${pageNum}`
+            leftGroup.appendChild(pageEl)
+        }
+    } else if (viewHref) {
         const link = document.createElement('a')
         link.href = viewHref
         link.className = 'qc-view-link external-link'
         link.textContent = 'View at source ↗'
         link.target = '_blank'
         link.rel = 'noopener'
-        actionsEl.appendChild(link)
+        leftGroup.appendChild(link)
     }
+
+    actionsEl.appendChild(leftGroup)
 
     const rightGroup = document.createElement('div')
     rightGroup.className = 'qc-highlight-actions-right'
@@ -151,9 +206,7 @@ function buildCard(
         capturedEl.className = 'qc-captured'
         capturedEl.textContent = captured
         rightGroup.appendChild(capturedEl)
-    }
 
-    if (viewHref) {
         const pipeSep = document.createElement('span')
         pipeSep.className = 'qc-footer-pipe'
         pipeSep.textContent = '|'

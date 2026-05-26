@@ -86,6 +86,17 @@
     justify-content: space-between;
 }
 
+.qc-highlight-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qc-pdf-page {
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
 .qc-highlight-actions-right {
     display: flex;
     align-items: center;
@@ -318,14 +329,26 @@ th[data-col-key="has_notes"] {
 }
 
 .qc-clip-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: inherit;
     font-weight: 500;
-    padding: 1px 5px;
-    border-radius: 3px;
+    padding: 3px 8px 3px 6px;
+    border-radius: 99px;
     background: var(--background-modifier-hover);
     color: var(--text-muted);
     white-space: nowrap;
+}
+
+.qc-badge-icon {
+    display: flex;
+    align-items: center;
+}
+
+.qc-badge-icon svg {
+    width: 11px;
+    height: 11px;
 }
 
 .qc-badge-highlight    { background: rgba(var(--color-accent-rgb), 0.15); color: var(--interactive-accent); }
