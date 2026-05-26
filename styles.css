@@ -555,6 +555,8 @@ th[data-col-key="has_notes"] {
     margin: 0 0 20px;
 }
 
+.qc-tweet-embed { max-width: 550px; margin: 0 auto 4px; }
+
 .qc-embed-blocked {
     display: flex;
     flex-direction: column;

@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, MarkdownRenderChild, setIcon } from 'obsidian'
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownRenderer, setIcon } from 'obsidian'
 import { loadIndex, deleteClip } from '../clipsIndex'
 
 export function processHighlight(app: App, el: HTMLElement, ctx: MarkdownPostProcessorContext, confirmDelete: () => boolean): void {
@@ -124,14 +124,16 @@ async function buildCard(
         }
     }
 
-    // Resolve clip_type from the index
+    // Resolve clip_type and URL from the index
     let clipType = isPdf ? 'pdf-highlight' : 'highlight'
+    let clipUrl = ''
     if (captured) {
         const index = await loadIndex(app)
-        outer: for (const entry of Object.values(index)) {
+        outer: for (const [url, entry] of Object.entries(index)) {
             for (const c of entry.clips) {
                 if (fmtDate(c.savedAt) === captured && c.path === sourcePath) {
                     clipType = c.clip_type
+                    clipUrl = url
                     break outer
                 }
             }
@@ -302,7 +304,15 @@ async function buildCard(
         noteSection.style.display = 'none'
     }
 
-    card.appendChild(quoteBlock)
+    if (clipType === 'tweet' && clipUrl) {
+        const embedEl = document.createElement('div')
+        embedEl.className = 'qc-tweet-embed'
+        const embedComponent = new MarkdownRenderChild(embedEl)
+        await MarkdownRenderer.render(app, `![](${clipUrl})`, embedEl, sourcePath, embedComponent)
+        card.appendChild(embedEl)
+    } else {
+        card.appendChild(quoteBlock)
+    }
     card.appendChild(footer)
 
     calloutSection.innerHTML = ''
