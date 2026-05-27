@@ -7,6 +7,26 @@ export const VIEW_CLIP_MANAGER = 'quickclip-manager'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
+function formatTimestamp(seconds: number): string {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    const mm = String(m).padStart(2, '0')
+    const ss = String(s).padStart(2, '0')
+    return h > 0 ? `▶ ${h}:${mm}:${ss}` : `▶ ${m}:${ss}`
+}
+
+function stripMarkdown(text: string): string {
+    return text
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt) => alt || '')  // images → alt text
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')                     // links → label
+        .replace(/\*\*(.+?)\*\*|__(.+?)__/g, '$1$2')                // bold
+        .replace(/\*(.+?)\*|_(.+?)_/g, '$1$2')                      // italic
+        .replace(/~~(.+?)~~/g, '$1')                                 // strikethrough
+        .replace(/`([^`]+)`/g, '$1')                                 // inline code
+        .trim()
+}
+
 const CLIP_TYPE_LABELS: Record<string, string> = {
     'highlight':     'Highlight',
     'full-page':     'Full page',
@@ -122,12 +142,23 @@ export class ClipManagerView extends ItemView {
             this.noteCache.set(ref.clip.hash, bodyLines.some(l => /^>\s*\[!note\]/i.test(l)))
             if (!this.snippetCache.has(ref.clip.hash)) {
                 for (const line of bodyLines) {
-                    const t = line.replace(/^#+\s*/, '').replace(/^>\s*/, '').trim()
-                    if (t && !t.startsWith('[!') && !t.startsWith('|') && !t.startsWith('!')) {
+                    const t = stripMarkdown(line.replace(/^#+\s*/, '').replace(/^>\s*/, ''))
+                    if (t && !line.startsWith('#') && !t.startsWith('[!') && !t.startsWith('|')) {
                         this.snippetCache.set(ref.clip.hash, t); break
                     }
                 }
             }
+        } else if (ref.clip.clip_type === 'video-clip') {
+            const date = new Date(ref.clip.savedAt)
+            const dateStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+            const row = content.split('\n').find(l => l.includes(`| ${dateStr} |`))
+            if (!row) { this.noteCache.set(ref.clip.hash, false); return }
+            // cols[0]="| [timestamp](...)"  cols[1]=date  cols[2]=note  cols[3]=tags
+            const note = row.split(' | ')[2]?.trim() ?? ''
+            const timestamp = ref.clip.start_time != null ? formatTimestamp(ref.clip.start_time) : ''
+            this.noteCache.set(ref.clip.hash, note.length > 0)
+            if (!this.snippetCache.has(ref.clip.hash))
+                this.snippetCache.set(ref.clip.hash, note || timestamp)
         } else {
             const date = new Date(ref.clip.savedAt)
             const capturedStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
@@ -145,7 +176,6 @@ export class ClipManagerView extends ItemView {
                 this.noteCache.set(ref.clip.hash, false)
                 return
             }
-            // Note is present if there's a > [!note] block immediately before > [!quote]
             let hasNote = false
             for (let i = quoteIdx - 1; i >= 0; i--) {
                 if (/^>\s*\[!note\]/i.test(lines[i])) { hasNote = true; break }
@@ -158,7 +188,7 @@ export class ClipManagerView extends ItemView {
                     if (lines[j].startsWith('> ') && !lines[j].startsWith('> [!'))
                         quoteLines.push(lines[j].slice(2).trim())
                 }
-                const snippet = quoteLines.join(' ').trim()
+                const snippet = stripMarkdown(quoteLines.join(' '))
                 if (snippet) this.snippetCache.set(ref.clip.hash, snippet)
             }
         }
@@ -542,7 +572,8 @@ export class ClipManagerView extends ItemView {
 
         // Snippet — always first, linked to exact clip location
         const snippetTd = tr.createEl('td', { cls: 'qc-cell qc-cell--snippet' })
-        const raw = ref.clip.text ?? this.snippetCache.get(ref.clip.hash) ?? CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type
+        const startTimeStr = ref.clip.start_time != null ? formatTimestamp(ref.clip.start_time) : ''
+        const raw = stripMarkdown(ref.clip.text ?? this.snippetCache.get(ref.clip.hash) ?? '') || startTimeStr || ref.pageTitle || (CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type)
         const len = this.plugin.settings.snippetLength
         const snippet = raw.length > len ? raw.slice(0, len) + '…' : raw
         const snippetLink = snippetTd.createEl('a', { cls: 'qc-snippet-link', text: snippet })
@@ -637,7 +668,8 @@ export class ClipManagerView extends ItemView {
     private updateClipCells(ref: ClipRef): void {
         const tr = this.contentEl.querySelector(`tr[data-hash="${ref.clip.hash}"]`)
         if (!tr) return
-        const raw = ref.clip.text ?? this.snippetCache.get(ref.clip.hash) ?? CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type
+        const startTimeStr = ref.clip.start_time != null ? formatTimestamp(ref.clip.start_time) : ''
+        const raw = stripMarkdown(ref.clip.text ?? this.snippetCache.get(ref.clip.hash) ?? '') || startTimeStr || ref.pageTitle || (CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type)
         const len = this.plugin.settings.snippetLength
         const snippetLink = tr.querySelector('.qc-snippet-link') as HTMLElement | null
         if (snippetLink) {
