@@ -11,6 +11,7 @@ export interface PluginSettings {
     filterFormat: string
     filterSource: string
     filterDate: string
+    filterNote: string
     confirmDelete: boolean
     rowDensity: 'compact' | 'comfortable' | 'spacious'
     snippetLength: number
@@ -25,6 +26,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
     filterFormat: '',
     filterSource: '',
     filterDate: '',
+    filterNote: '',
     confirmDelete: false,
     rowDensity: 'comfortable',
     snippetLength: 20,

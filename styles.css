@@ -313,6 +313,10 @@
 }
 
 .qc-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--background-primary);
     text-align: left;
     padding: 6px 10px;
     font-size: 0.8em;
@@ -471,6 +475,7 @@ th[data-col-key="has_notes"] {
 .qc-badge-tweet        { background: rgba(72, 180, 200, 0.15); color: #48b4c8; }
 .qc-badge-image        { background: rgba(72, 200, 130, 0.15); color: #48c882; }
 .qc-badge-pdf-highlight{ background: rgba(200, 150, 72, 0.15); color: #c89648; }
+.qc-badge-video-clip   { background: rgba(160, 72, 200, 0.15); color: #a048c8; }
 
 .qc-domain-chip {
     font-size: inherit;

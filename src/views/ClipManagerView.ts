@@ -14,6 +14,7 @@ const CLIP_TYPE_LABELS: Record<string, string> = {
     'tweet':         'Tweet',
     'pdf-highlight': 'PDF',
     'image':         'Image',
+    'video-clip':    'Video clip',
 }
 
 type SortKey = 'saved_at' | 'clip_type' | 'content_type' | 'page_title' | 'domain'
@@ -210,6 +211,7 @@ export class ClipManagerView extends ItemView {
     private filterFormatEl!: HTMLSelectElement
     private filterSourceEl!: HTMLSelectElement
     private filterDateEl!: HTMLSelectElement
+    private filterNoteEl!: HTMLSelectElement
     private filterClearBtn!: HTMLButtonElement
 
     private renderFilterBar(container: HTMLElement): void {
@@ -235,16 +237,24 @@ export class ClipManagerView extends ItemView {
             { value: 'month', label: 'Last 30 days' },
         ], this.plugin.settings.filterDate)
 
+        this.filterNoteEl = this.createFilterSelect(bar, 'Has Note', [
+            { value: '',    label: 'All' },
+            { value: 'yes', label: 'Yes' },
+            { value: 'no',  label: 'No' },
+        ], this.plugin.settings.filterNote)
+
         this.filterClearBtn = bar.createEl('button', { cls: 'qc-filter-clear', text: '✕ Clear' })
         this.filterClearBtn.addEventListener('click', async () => {
             this.plugin.settings.filterFormat = ''
             this.plugin.settings.filterSource = ''
             this.plugin.settings.filterDate = ''
+            this.plugin.settings.filterNote = ''
             await this.plugin.saveSettings()
             this.filterFormatEl.value = ''
             this.filterSourceEl.value = ''
             this.filterDateEl.value = ''
-            ;[this.filterFormatEl, this.filterSourceEl, this.filterDateEl]
+            this.filterNoteEl.value = ''
+            ;[this.filterFormatEl, this.filterSourceEl, this.filterDateEl, this.filterNoteEl]
                 .forEach(el => el.removeClass('qc-filter-select--active'))
             this.updateFilterClear()
             this.applyFilters()
@@ -254,6 +264,7 @@ export class ClipManagerView extends ItemView {
             [this.filterFormatEl, 'filterFormat'],
             [this.filterSourceEl, 'filterSource'],
             [this.filterDateEl,   'filterDate'],
+            [this.filterNoteEl,   'filterNote'],
         ] as [HTMLSelectElement, string][]) {
             el.addEventListener('change', async () => {
                 (this.plugin.settings as unknown as Record<string, string>)[key] = el.value
@@ -284,12 +295,12 @@ export class ClipManagerView extends ItemView {
 
     private updateFilterClear(): void {
         if (!this.filterClearBtn) return
-        const { filterFormat, filterSource, filterDate } = this.plugin.settings
-        this.filterClearBtn.style.display = filterFormat || filterSource || filterDate ? '' : 'none'
+        const { filterFormat, filterSource, filterDate, filterNote } = this.plugin.settings
+        this.filterClearBtn.style.display = filterFormat || filterSource || filterDate || filterNote ? '' : 'none'
     }
 
     private getFiltered(): ClipRef[] {
-        const { filterFormat, filterSource, filterDate } = this.plugin.settings
+        const { filterFormat, filterSource, filterDate, filterNote } = this.plugin.settings
         const now = Date.now()
         const DAY = 86400000
         return this.clips.filter(ref => {
@@ -301,6 +312,8 @@ export class ClipManagerView extends ItemView {
                 if (filterDate === 'week'  && age > 7 * DAY) return false
                 if (filterDate === 'month' && age > 30 * DAY) return false
             }
+            if (filterNote === 'yes' && this.noteCache.get(ref.clip.hash) !== true) return false
+            if (filterNote === 'no'  && this.noteCache.get(ref.clip.hash) === true) return false
             return true
         })
     }
