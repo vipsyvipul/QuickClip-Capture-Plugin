@@ -71,6 +71,7 @@ export default class QuickClipCapturePlugin extends Plugin {
             this.app.workspace.on('layout-change', () => {
                 const view = this.app.workspace.getActiveViewOfType(MarkdownView)
                 if (!view || view.getMode() !== 'preview') return
+                injectFullPageHeader(this.app, view.containerEl, view.file?.path ?? '')
                 injectVideoClipView(this.app, view.containerEl, view.file?.path ?? '', () => this.settings.confirmDelete)
             })
         )

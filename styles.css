@@ -159,6 +159,81 @@
 
 /* ── Full-Page Reading Header ───────────────────────────────── */
 
+.qc-reading-progress {
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: var(--background-primary);
+    z-index: 50;
+    flex-shrink: 0;
+    overflow: visible;
+    transition: opacity 300ms ease;
+}
+
+/* Opaque cover that fills the padding-top area above the sticky bar,
+   hiding content that scrolls into that gap. Inherits parent opacity
+   so it appears/disappears with the bar automatically. */
+.qc-reading-progress::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: var(--background-primary);
+}
+
+.qc-reading-progress::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: linear-gradient(to bottom, var(--background-primary), transparent);
+    pointer-events: none;
+}
+
+.qc-reading-progress--hidden {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0ms;
+}
+
+.qc-reading-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--color-accent);
+    transition: width 60ms linear;
+}
+
+.qc-progress-sentinel {
+    height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.qc-fullpage-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 24px;
+}
+
+.qc-fullpage-pill {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.8em;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 99px;
+    background: var(--background-modifier-hover);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
 
 /* ── Clip Manager View ──────────────────────────────────────── */
 
