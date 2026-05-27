@@ -62,6 +62,23 @@ export async function updateContentType(app: App, url: string, contentType: Cont
     }
 }
 
+export async function updateClipNote(app: App, url: string, hash: string, noteText: string): Promise<void> {
+    const index = await loadIndex(app)
+    const entry = index[url]
+    if (!entry) return
+    const clip = entry.clips.find(c => c.hash === hash)
+    if (!clip) return
+    const file = app.vault.getAbstractFileByPath(clip.path)
+    if (!(file instanceof TFile)) return
+    if (clip.clip_type === 'full-page') {
+        await updateFullPageNote(app, file, noteText)
+    } else if (clip.clip_type === 'video-clip') {
+        await updateVideoClipNote(app, file, clip, noteText)
+    } else {
+        await updateHighlightNote(app, file, clip, noteText)
+    }
+}
+
 export async function updateClipTags(app: App, url: string, hash: string, tags: string[]): Promise<void> {
     const index = await loadIndex(app)
     const entry = index[url]
@@ -79,6 +96,8 @@ async function updateTagsInFile(app: App, clip: Clip, tags: string[]): Promise<v
 
     if (clip.clip_type === 'full-page') {
         await updateFullPageTags(app, file, tags)
+    } else if (clip.clip_type === 'video-clip') {
+        await updateVideoClipTags(app, file, clip, tags)
     } else {
         await updateHighlightTags(app, file, clip, tags)
     }
@@ -149,17 +168,32 @@ async function updateHighlightTags(app: App, file: TFile, clip: Clip, tags: stri
     await app.vault.modify(file, newLines.join('\n'))
 }
 
+// Identifies a video-clip table row using Clip Timeline date + start_time as compound key.
+// Falls back to date-only if start_time is absent, but the compound key is required to
+// disambiguate clips from the same video saved within the same minute.
+function findVideoClipRowIdx(lines: string[], clip: Clip): number {
+    const date = new Date(clip.savedAt)
+    const dateStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+    if (clip.start_time != null) {
+        const h = Math.floor(clip.start_time / 3600)
+        const m = Math.floor((clip.start_time % 3600) / 60)
+        const s = Math.floor(clip.start_time % 60)
+        const timeText = h > 0
+            ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+            : `${m}:${String(s).padStart(2,'0')}`
+        const idx = lines.findIndex(l => l.includes(`| ${dateStr} |`) && l.includes(`[${timeText}]`))
+        if (idx !== -1) return idx
+    }
+    return lines.findIndex(l => l.includes(`| ${dateStr} |`))
+}
+
 async function removeVideoClipRow(app: App, clip: Clip): Promise<void> {
     const file = app.vault.getAbstractFileByPath(clip.path)
     if (!(file instanceof TFile)) return
 
     const content = await app.vault.read(file)
-    const date = new Date(clip.savedAt)
-    // Match the "Clip Timeline" column value: "DD Mon YYYY \| HH:MM"
-    const dateStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
-
     const lines = content.split('\n')
-    const rowIdx = lines.findIndex(l => l.includes(`| ${dateStr} |`))
+    const rowIdx = findVideoClipRowIdx(lines, clip)
     if (rowIdx === -1) return
 
     await app.vault.modify(file, lines.filter((_, i) => i !== rowIdx).join('\n'))
@@ -221,6 +255,99 @@ async function removeHighlightFromFile(app: App, clip: Clip): Promise<void> {
     ].join('\n')
 
     await app.vault.modify(file, removeOrphanedHeadings(afterRemoval))
+}
+
+async function updateFullPageNote(app: App, file: TFile, noteText: string): Promise<void> {
+    const content = await app.vault.read(file)
+    const lines = content.split('\n')
+    if (lines[0] !== '---') return
+    const fmEnd = lines.indexOf('---', 1)
+    if (fmEnd === -1) return
+
+    const noteIdx = lines.findIndex((l, i) => i > fmEnd && /^>\s*\[!note\]/i.test(l))
+
+    if (noteText) {
+        const newBlock = [`> [!note]`, ...noteText.split('\n').map(l => `> ${l}`)]
+        if (noteIdx !== -1) {
+            let noteEnd = noteIdx + 1
+            while (noteEnd < lines.length && lines[noteEnd].startsWith('>')) noteEnd++
+            lines.splice(noteIdx, noteEnd - noteIdx, ...newBlock)
+        } else {
+            const insertAt = lines.findIndex((l, i) => i > fmEnd + 1 && l.trim() !== '')
+            const pos = insertAt !== -1 ? insertAt : fmEnd + 1
+            lines.splice(pos, 0, ...newBlock, '')
+        }
+    } else if (noteIdx !== -1) {
+        let noteEnd = noteIdx + 1
+        while (noteEnd < lines.length && lines[noteEnd].startsWith('>')) noteEnd++
+        if (noteEnd < lines.length && lines[noteEnd] === '') noteEnd++
+        lines.splice(noteIdx, noteEnd - noteIdx)
+    }
+
+    await app.vault.modify(file, lines.join('\n'))
+}
+
+async function updateHighlightNote(app: App, file: TFile, clip: Clip, noteText: string): Promise<void> {
+    const content = await app.vault.read(file)
+    const lines = content.split('\n')
+
+    const date = new Date(clip.savedAt)
+    const capturedStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+    const capturedIdx = lines.findIndex(l => l.includes(`| Captured | ${capturedStr} |`))
+    if (capturedIdx === -1) return
+
+    let quoteIdx = -1
+    for (let i = capturedIdx - 1; i >= 0; i--) {
+        if (lines[i].startsWith('> [!quote]') || lines[i].startsWith('> [!clip]')) { quoteIdx = i; break }
+    }
+    if (quoteIdx === -1) return
+
+    // Find [!note] block immediately before [!quote]
+    let noteBlockStart = -1
+    let i = quoteIdx - 1
+    while (i >= 0 && lines[i] === '') i--
+    while (i >= 0 && lines[i].startsWith('>') && !/^>\s*\[!/.test(lines[i])) i--
+    if (i >= 0 && /^>\s*\[!note\]/i.test(lines[i])) noteBlockStart = i
+
+    if (noteText) {
+        const newBlock = [`> [!note]`, ...noteText.split('\n').map(l => `> ${l}`), '']
+        if (noteBlockStart !== -1) {
+            lines.splice(noteBlockStart, quoteIdx - noteBlockStart, ...newBlock)
+        } else {
+            lines.splice(quoteIdx, 0, ...newBlock)
+        }
+    } else if (noteBlockStart !== -1) {
+        lines.splice(noteBlockStart, quoteIdx - noteBlockStart)
+    }
+
+    await app.vault.modify(file, lines.join('\n'))
+}
+
+async function updateVideoClipNote(app: App, file: TFile, clip: Clip, noteText: string): Promise<void> {
+    const content = await app.vault.read(file)
+    const lines = content.split('\n')
+    const rowIdx = findVideoClipRowIdx(lines, clip)
+    if (rowIdx === -1) return
+    // Row: "| [link](url) | date | note | tags |" → split by " | " → 4 parts
+    const parts = lines[rowIdx].split(' | ')
+    if (parts.length < 4) return
+    parts[2] = noteText.replace(/\n/g, '<br>')
+    lines[rowIdx] = parts.join(' | ')
+    await app.vault.modify(file, lines.join('\n'))
+}
+
+async function updateVideoClipTags(app: App, file: TFile, clip: Clip, tags: string[]): Promise<void> {
+    const content = await app.vault.read(file)
+    const lines = content.split('\n')
+    const rowIdx = findVideoClipRowIdx(lines, clip)
+    if (rowIdx === -1) return
+    // Row: "| [link](url) | date | note | tags |" → split by " | " → 4 parts
+    const parts = lines[rowIdx].split(' | ')
+    if (parts.length < 4) return
+    const tagsStr = tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ')
+    parts[3] = tagsStr ? `${tagsStr} |` : ' |'
+    lines[rowIdx] = parts.join(' | ')
+    await app.vault.modify(file, lines.join('\n'))
 }
 
 function removeOrphanedHeadings(content: string): string {

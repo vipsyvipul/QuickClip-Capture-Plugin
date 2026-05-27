@@ -18,11 +18,12 @@ export interface PluginSettings {
     dateFormat: 'absolute' | 'relative' | 'full'
     filePathDisplay: 'full' | 'filename'
     autoOpenOnStartup: boolean
+    columnWidths: Record<string, number>
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
-    visibleColumns: ['clip_type', 'page_title', 'domain', 'saved_at'],
-    columnOrder: [],
+    visibleColumns: ['page_title', 'content_type', 'note', 'tags'],
+    columnOrder: ['page_title', 'snippet', 'content_type', 'note', 'tags'],
     filterFormat: '',
     filterSource: '',
     filterDate: '',
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
     dateFormat: 'absolute',
     filePathDisplay: 'full',
     autoOpenOnStartup: false,
+    columnWidths: {},
 }
 
 export default class QuickClipCapturePlugin extends Plugin {
