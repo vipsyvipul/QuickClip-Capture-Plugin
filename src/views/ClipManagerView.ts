@@ -14,7 +14,7 @@ function clipKey(ref: ClipRef): string {
 function formatTimestamp(seconds: number): string {
     const h = Math.floor(seconds / 3600)
     const m = Math.floor((seconds % 3600) / 60)
-    const s = seconds % 60
+    const s = Math.floor(seconds % 60)
     const mm = String(m).padStart(2, '0')
     const ss = String(s).padStart(2, '0')
     return h > 0 ? `▶ ${h}:${mm}:${ss}` : `▶ ${m}:${ss}`
@@ -74,6 +74,7 @@ export class ClipManagerView extends ItemView {
     private noteCache = new Map<string, boolean>()
     private noteTextCache = new Map<string, string>()
     private snippetRefreshTimer: ReturnType<typeof setTimeout> | null = null
+    private resizeDragCleanup: (() => void) | null = null
 
     constructor(leaf: WorkspaceLeaf, plugin: QuickClipCapturePlugin) {
         super(leaf)
@@ -112,6 +113,8 @@ export class ClipManagerView extends ItemView {
     }
 
     async onClose(): Promise<void> {
+        this.resizeDragCleanup?.()
+        this.resizeDragCleanup = null
         if (this.colPickerClose) {
             document.removeEventListener('click', this.colPickerClose)
             this.colPickerClose = null
@@ -126,19 +129,21 @@ export class ClipManagerView extends ItemView {
         const index = await loadIndex(this.app)
         this.clips = getAllClips(index)
         this.render()
-        for (const ref of this.clips.filter(r => !this.noteCache.has(clipKey(r)))) {
-            this.loadFileData(ref).then(() => this.updateClipCells(ref))
-        }
+        const pending = this.clips.filter(r => !this.noteCache.has(clipKey(r)))
+        await Promise.all(pending.map(ref => this.loadFileData(ref).then(() => this.updateClipCells(ref))))
+        if (this.plugin.settings.filterNote) this.applyFilters()
     }
 
     private async loadFileData(ref: ClipRef): Promise<void> {
         if (!ref.clip.path) {
-            this.noteCache.set(ref.clip.hash, false)
+            this.noteCache.set(clipKey(ref), false)
+            this.noteTextCache.set(clipKey(ref), '')
             return
         }
         const file = this.app.vault.getAbstractFileByPath(ref.clip.path)
         if (!(file instanceof TFile)) {
-            this.noteCache.set(ref.clip.hash, false)
+            this.noteCache.set(clipKey(ref), false)
+            this.noteTextCache.set(clipKey(ref), '')
             return
         }
         const content = await this.app.vault.read(file)
@@ -180,7 +185,7 @@ export class ClipManagerView extends ItemView {
             // cols[0]="| [timestamp](...)"  cols[1]=date  cols[2]=note  cols[3]=tags
             const note = row.split(' | ')[2]?.trim() ?? ''
             const timestamp = ref.clip.start_time != null ? formatTimestamp(ref.clip.start_time) : ''
-            const noteDecoded = note.replace(/<br\s*\/?>/gi, '\n')
+            const noteDecoded = note.replace(/\\\|/g, '|').replace(/<br\s*\/?>/gi, '\n')
             this.noteCache.set(clipKey(ref), noteDecoded.length > 0)
             this.noteTextCache.set(clipKey(ref), noteDecoded)
             if (!this.snippetCache.has(clipKey(ref)))
@@ -452,6 +457,14 @@ export class ClipManagerView extends ItemView {
         panel.addEventListener('click', (e) => e.stopPropagation())
     }
 
+    private rawSnippet(ref: ClipRef): string {
+        const startTimeStr = ref.clip.start_time != null ? formatTimestamp(ref.clip.start_time) : ''
+        return stripMarkdown(ref.clip.text ?? this.snippetCache.get(clipKey(ref)) ?? '')
+            || startTimeStr
+            || ref.pageTitle
+            || (CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type)
+    }
+
     public rerenderTable(): void { this.renderTableOnly() }
 
     private renderTableOnly(): void {
@@ -616,14 +629,22 @@ export class ClipManagerView extends ItemView {
                     th.style.minWidth = newW + 'px'
                 }
 
-                const onUp = async () => {
+                const cleanup = () => {
                     document.removeEventListener('mousemove', onMove)
                     document.removeEventListener('mouseup', onUp)
                     document.body.style.userSelect = ''
-                    this.plugin.settings.columnWidths[key] = th.offsetWidth
-                    await this.plugin.saveSettings()
+                    this.resizeDragCleanup = null
                 }
 
+                const onUp = async () => {
+                    cleanup()
+                    if (document.contains(th)) {
+                        this.plugin.settings.columnWidths[key] = th.offsetWidth
+                        await this.plugin.saveSettings()
+                    }
+                }
+
+                this.resizeDragCleanup = cleanup
                 document.addEventListener('mousemove', onMove)
                 document.addEventListener('mouseup', onUp)
             })
@@ -654,8 +675,7 @@ export class ClipManagerView extends ItemView {
             switch (col.key) {
                 case 'snippet': {
                     td.addClass('qc-cell--snippet')
-                    const startTimeStr = ref.clip.start_time != null ? formatTimestamp(ref.clip.start_time) : ''
-                    const raw = stripMarkdown(ref.clip.text ?? this.snippetCache.get(clipKey(ref)) ?? '') || startTimeStr || ref.pageTitle || (CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type)
+                    const raw = this.rawSnippet(ref)
                     const len = this.plugin.settings.snippetLength
                     const snippet = raw.length > len ? raw.slice(0, len) + '…' : raw
                     const snippetLink = td.createEl('a', { cls: 'qc-snippet-link', text: snippet })
@@ -752,8 +772,7 @@ export class ClipManagerView extends ItemView {
     private updateClipCells(ref: ClipRef): void {
         const tr = this.contentEl.querySelector(`tr[data-clip-key="${CSS.escape(clipKey(ref))}"]`)
         if (!tr) return
-        const startTimeStr = ref.clip.start_time != null ? formatTimestamp(ref.clip.start_time) : ''
-        const raw = stripMarkdown(ref.clip.text ?? this.snippetCache.get(clipKey(ref)) ?? '') || startTimeStr || ref.pageTitle || (CLIP_TYPE_LABELS[ref.clip.clip_type] ?? ref.clip.clip_type)
+        const raw = this.rawSnippet(ref)
         const len = this.plugin.settings.snippetLength
         const snippetLink = tr.querySelector('.qc-snippet-link') as HTMLElement | null
         if (snippetLink) {

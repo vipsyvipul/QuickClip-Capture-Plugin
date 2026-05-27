@@ -271,7 +271,9 @@ async function updateFullPageNote(app: App, file: TFile, noteText: string): Prom
         if (noteIdx !== -1) {
             let noteEnd = noteIdx + 1
             while (noteEnd < lines.length && lines[noteEnd].startsWith('>')) noteEnd++
-            lines.splice(noteIdx, noteEnd - noteIdx, ...newBlock)
+            // Consume existing trailing blank so we always write exactly one
+            if (noteEnd < lines.length && lines[noteEnd] === '') noteEnd++
+            lines.splice(noteIdx, noteEnd - noteIdx, ...newBlock, '')
         } else {
             const insertAt = lines.findIndex((l, i) => i > fmEnd + 1 && l.trim() !== '')
             const pos = insertAt !== -1 ? insertAt : fmEnd + 1
@@ -331,7 +333,7 @@ async function updateVideoClipNote(app: App, file: TFile, clip: Clip, noteText: 
     // Row: "| [link](url) | date | note | tags |" → split by " | " → 4 parts
     const parts = lines[rowIdx].split(' | ')
     if (parts.length < 4) return
-    parts[2] = noteText.replace(/\n/g, '<br>')
+    parts[2] = noteText.replace(/\n/g, '<br>').replace(/\|/g, '\\|')
     lines[rowIdx] = parts.join(' | ')
     await app.vault.modify(file, lines.join('\n'))
 }
