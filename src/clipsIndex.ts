@@ -5,17 +5,26 @@ const INDEX_PATH = '.quickclip/clipsHistory.json'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
+let _indexCache: ClipsIndex | null = null
+
+export function invalidateIndexCache(): void {
+    _indexCache = null
+}
+
 export async function loadIndex(app: App): Promise<ClipsIndex> {
+    if (_indexCache) return _indexCache
     try {
         const raw = await app.vault.adapter.read(INDEX_PATH)
         const parsed = JSON.parse(raw)
-        return typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+        _indexCache = typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as ClipsIndex : {}
+        return _indexCache
     } catch {
         return {}
     }
 }
 
 export async function saveIndex(app: App, index: ClipsIndex): Promise<void> {
+    _indexCache = index
     await app.vault.adapter.write(INDEX_PATH, JSON.stringify(index, null, 2))
 }
 

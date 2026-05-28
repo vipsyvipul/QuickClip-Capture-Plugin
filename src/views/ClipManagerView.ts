@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, TFile, Notice, setIcon } from 'obsidian'
 import QuickClipCapturePlugin from '../main'
-import { loadIndex, getAllClips, deleteClip, updateContentType, updateClipTags, updateClipNote } from '../clipsIndex'
+import { loadIndex, getAllClips, deleteClip, updateContentType, updateClipTags, updateClipNote, invalidateIndexCache } from '../clipsIndex'
 import { ClipRef, Clip, ContentType } from '../types'
 
 export const VIEW_CLIP_MANAGER = 'quickclip-manager'
@@ -83,13 +83,14 @@ export class ClipManagerView extends ItemView {
 
     getViewType(): string { return VIEW_CLIP_MANAGER }
     getDisplayText(): string { return 'QuickClip Capture' }
-    getIcon(): string { return 'scissors' }
+    getIcon(): string { return 'quickclip-capture' }
 
     async onOpen(): Promise<void> {
         this.registerEvent(
             this.app.vault.on('modify', async (file) => {
                 if (!(file instanceof TFile)) return
                 if (file.path === '.quickclip/clipsHistory.json') {
+                    invalidateIndexCache()
                     await this.refresh()
                     return
                 }

@@ -1,4 +1,4 @@
-import { MarkdownView, Plugin } from 'obsidian'
+import { addIcon, MarkdownView, Plugin, TFile } from 'obsidian'
 import { processHighlight, scanAndTransform } from './renderers/highlight'
 import { processFullPage, injectFullPageHeader } from './renderers/fullPage'
 import { injectVideoClipView } from './renderers/videoClip'
@@ -37,11 +37,18 @@ const DEFAULT_SETTINGS: PluginSettings = {
     columnWidths: {},
 }
 
+const QC_ICON_ID = 'quickclip-capture'
+const QC_ICON_SVG =
+    '<rect x="6" y="32" width="88" height="58" rx="8" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M 32 32 L 36 20 Q 36 12 43 12 L 57 12 Q 64 12 64 20 L 68 32" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M 94 44 L 56 44 Q 50 44 50 51 Q 50 58 56 58 L 94 58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'
+
 export default class QuickClipCapturePlugin extends Plugin {
     settings!: PluginSettings
 
     async onload(): Promise<void> {
         await this.loadSettings()
+        addIcon(QC_ICON_ID, QC_ICON_SVG)
 
         this.registerView(
             VIEW_CLIP_MANAGER,
@@ -70,6 +77,19 @@ export default class QuickClipCapturePlugin extends Plugin {
             })
         )
 
+        // Re-inject video embed when the open file is modified externally (e.g. extension saving a new clip)
+        this.registerEvent(
+            this.app.vault.on('modify', (file) => {
+                if (!(file instanceof TFile)) return
+                const view = this.app.workspace.getActiveViewOfType(MarkdownView)
+                if (!view || view.getMode() !== 'preview') return
+                if (view.file?.path !== file.path) return
+                setTimeout(() => {
+                    injectVideoClipView(this.app, view.containerEl, file.path, () => this.settings.confirmDelete)
+                }, 300)
+            })
+        )
+
         // Also handle switching to Reading view within the same leaf
         this.registerEvent(
             this.app.workspace.on('layout-change', () => {
@@ -85,7 +105,7 @@ export default class QuickClipCapturePlugin extends Plugin {
         if (this.settings.autoOpenOnStartup)
             this.app.workspace.onLayoutReady(() => this.activateView())
 
-        this.addRibbonIcon('scissors', 'QuickClip Capture', () => this.activateView())
+        this.addRibbonIcon(QC_ICON_ID, 'QuickClip Capture', () => this.activateView())
 
         this.addCommand({
             id: 'open-manager',
