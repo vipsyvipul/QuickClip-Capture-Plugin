@@ -166,8 +166,8 @@ export class ClipManagerView extends ItemView {
             }
             if (!this.snippetCache.has(clipKey(ref))) {
                 for (const line of bodyLines) {
-                    const t = stripMarkdown(line.replace(/^#+\s*/, '').replace(/^>\s*/, ''))
-                    if (t && !line.startsWith('#') && !t.startsWith('[!') && !t.startsWith('|')) {
+                    const t = stripMarkdown(line.replace(/^#+\s*/, ''))
+                    if (t && !line.startsWith('#') && !line.startsWith('>') && !t.startsWith('|')) {
                         this.snippetCache.set(clipKey(ref), t); break
                     }
                 }
