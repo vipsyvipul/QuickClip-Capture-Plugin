@@ -655,8 +655,8 @@ export class ClipManagerView extends ItemView {
         return [...clips].sort((a, b) => {
             let va: string, vb: string
             switch (this.sortKey) {
-                case 'saved_at':   va = a.clip.savedAt;    vb = b.clip.savedAt;    break
-                case 'clip_type':    va = a.clip.clip_type;    vb = b.clip.clip_type;    break
+                case 'saved_at':   va = a.clip.savedAt ?? '';    vb = b.clip.savedAt ?? '';    break
+                case 'clip_type':    va = a.clip.clip_type ?? '';    vb = b.clip.clip_type ?? '';    break
                 case 'content_type': va = a.content_type ?? ''; vb = b.content_type ?? ''; break
                 case 'page_title':   va = a.pageTitle ?? '';    vb = b.pageTitle ?? '';    break
                 case 'domain':     va = a.domain ?? '';    vb = b.domain ?? '';    break
