@@ -18,6 +18,9 @@ class HighlightScanner extends MarkdownRenderChild {
                 requestAnimationFrame(tryTransform)
                 return
             }
+            // Only render in Reading view — Live Preview mounts callouts outside
+            // .markdown-reading-view (inside .cm-editor), so this acts as the guard
+            if (!this.containerEl.closest('.markdown-reading-view')) return
             transformSection(this.app, this.sourcePath, this.confirmDelete, this.containerEl)
         }
         tryTransform()

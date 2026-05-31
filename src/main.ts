@@ -19,6 +19,12 @@ export interface PluginSettings {
     filePathDisplay: 'full' | 'filename'
     autoOpenOnStartup: boolean
     columnWidths: Record<string, number>
+    lastMigrationReport?: {
+        migrated: number
+        skipped: number
+        timestamp: string
+        results: Array<{ filePath: string; preview: string; status: string; reason: string }>
+    }
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {

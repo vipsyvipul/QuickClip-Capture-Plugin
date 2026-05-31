@@ -97,6 +97,11 @@ export class QuickClipSettingTab extends PluginSettingTab {
         const migrateBtn = containerEl.createEl('button', { text: 'Migrate clips to new format', cls: 'mod-cta' })
         const statusEl   = containerEl.createDiv({ cls: 'qc-migrate-status' })
 
+        // Render persisted results from last run
+        if (this.plugin.settings.lastMigrationReport) {
+            this.renderMigrationResults(statusEl, this.plugin.settings.lastMigrationReport)
+        }
+
         migrateBtn.addEventListener('click', async () => {
             migrateBtn.disabled = true
             migrateBtn.setText('Migrating…')
@@ -117,29 +122,42 @@ export class QuickClipSettingTab extends PluginSettingTab {
                 return
             }
 
-            statusEl.empty()
-
-            const summary = statusEl.createEl('p', { cls: 'qc-migrate-summary' })
-            summary.setText(
-                `✓ ${report.migrated} clip${report.migrated !== 1 ? 's' : ''} migrated` +
-                (report.skipped > 0 ? `, ${report.skipped} file${report.skipped !== 1 ? 's' : ''} already up to date` : '')
-            )
-
-            const issues = report.results.filter(r => r.status !== 'migrated')
-            if (issues.length > 0) {
-                statusEl.createEl('p', {
-                    text: `${issues.filter(r => r.status === 'error').length} error(s), ${issues.filter(r => r.status === 'warning').length} warning(s):`,
-                    cls: 'qc-migrate-issues-heading',
-                })
-                const list = statusEl.createEl('ul', { cls: 'qc-migrate-issues' })
-                for (const issue of issues) {
-                    this.renderIssueItem(list, issue)
-                }
+            const stored = {
+                migrated: report.migrated,
+                skipped: report.skipped,
+                timestamp: new Date().toISOString(),
+                results: report.results,
             }
+            this.plugin.settings.lastMigrationReport = stored
+            await this.plugin.saveSettings()
+
+            statusEl.empty()
+            this.renderMigrationResults(statusEl, stored)
 
             migrateBtn.disabled = false
             migrateBtn.setText('Migrate clips to new format')
         })
+    }
+
+    private renderMigrationResults(statusEl: HTMLElement, report: { migrated: number; skipped: number; timestamp?: string; results: Array<{ filePath: string; preview: string; status: string; reason: string }> }): void {
+        const summary = statusEl.createEl('p', { cls: 'qc-migrate-summary' })
+        let summaryText = `✓ ${report.migrated} clip${report.migrated !== 1 ? 's' : ''} migrated`
+        if (report.skipped > 0) summaryText += `, ${report.skipped} file${report.skipped !== 1 ? 's' : ''} already up to date`
+        if (report.timestamp) {
+            const d = new Date(report.timestamp)
+            summaryText += ` — ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        }
+        summary.setText(summaryText)
+
+        const issues = report.results.filter(r => r.status !== 'migrated')
+        if (issues.length > 0) {
+            statusEl.createEl('p', {
+                text: `${issues.filter(r => r.status === 'error').length} error(s), ${issues.filter(r => r.status === 'warning').length} warning(s):`,
+                cls: 'qc-migrate-issues-heading',
+            })
+            const list = statusEl.createEl('ul', { cls: 'qc-migrate-issues' })
+            for (const issue of issues) this.renderIssueItem(list, issue as MigrationClipResult)
+        }
     }
 
     private renderIssueItem(list: HTMLElement, issue: MigrationClipResult): void {
