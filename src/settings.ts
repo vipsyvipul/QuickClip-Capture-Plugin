@@ -1,7 +1,16 @@
 import { App, PluginSettingTab, Setting, TFile } from 'obsidian'
-import QuickClipCapturePlugin from './main'
+import QuickClipCapturePlugin, { DEFAULT_CALLOUT_COLORS } from './main'
 import { VIEW_CLIP_MANAGER } from './views/ClipManagerView'
 import { migrateOldFormatClips, hasOldFormatClips, MigrationClipResult } from './migration'
+
+const CALLOUT_COLOR_ROWS: { key: string; label: string }[] = [
+    { key: 'qc_highlight',     label: 'Highlight' },
+    { key: 'qc_tweet',         label: 'Tweet' },
+    { key: 'qc_pdf_highlight', label: 'PDF Highlight' },
+    { key: 'qc_image',         label: 'Image' },
+    { key: 'qc_note',          label: 'Note (child callout)' },
+    { key: 'qc_details',       label: 'Details (child callout)' },
+]
 
 export class QuickClipSettingTab extends PluginSettingTab {
     constructor(app: App, private plugin: QuickClipCapturePlugin) {
@@ -86,6 +95,33 @@ export class QuickClipSettingTab extends PluginSettingTab {
                 .onChange(async val => {
                     this.plugin.settings.confirmDelete = val
                     await this.plugin.saveSettings()
+                }))
+
+        containerEl.createEl('h3', { text: 'Callout Colors' })
+        containerEl.createEl('p', {
+            text: 'Accent color for each clip type in editing and reading view.',
+            cls: 'setting-item-description',
+        })
+
+        for (const { key, label } of CALLOUT_COLOR_ROWS) {
+            const setting = new Setting(containerEl).setName(label)
+            const input = setting.controlEl.createEl('input', { type: 'color' })
+            input.value = this.plugin.settings.calloutColors[key] ?? DEFAULT_CALLOUT_COLORS[key]
+            input.addEventListener('input', async () => {
+                this.plugin.settings.calloutColors[key] = input.value
+                await this.plugin.saveSettings()
+                this.plugin.injectCalloutColors()
+            })
+        }
+
+        new Setting(containerEl)
+            .addButton(b => b
+                .setButtonText('Reset to defaults')
+                .onClick(async () => {
+                    this.plugin.settings.calloutColors = { ...DEFAULT_CALLOUT_COLORS }
+                    await this.plugin.saveSettings()
+                    this.plugin.injectCalloutColors()
+                    this.display()
                 }))
 
         // Entire migration section — hidden until we confirm old clips exist

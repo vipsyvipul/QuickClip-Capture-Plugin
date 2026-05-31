@@ -19,12 +19,27 @@ export interface PluginSettings {
     filePathDisplay: 'full' | 'filename'
     autoOpenOnStartup: boolean
     columnWidths: Record<string, number>
+    calloutColors: Record<string, string>
     lastMigrationReport?: {
         migrated: number
         skipped: number
         timestamp: string
         results: Array<{ filePath: string; preview: string; status: string; reason: string }>
     }
+}
+
+export const DEFAULT_CALLOUT_COLORS: Record<string, string> = {
+    qc_highlight:     '#E8A838',
+    qc_tweet:         '#1D9BF0',
+    qc_pdf_highlight: '#E05252',
+    qc_image:         '#9B59B6',
+    qc_note:          '#6B7280',
+    qc_details:       '#9CA3AF',
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+    const n = parseInt(hex.replace('#', ''), 16)
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
@@ -41,6 +56,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
     filePathDisplay: 'full',
     autoOpenOnStartup: false,
     columnWidths: {},
+    calloutColors: { ...DEFAULT_CALLOUT_COLORS },
 }
 
 const QC_ICON_ID = 'quickclip-capture'
@@ -51,10 +67,12 @@ const QC_ICON_SVG =
 
 export default class QuickClipCapturePlugin extends Plugin {
     settings!: PluginSettings
+    private calloutStyleEl: HTMLStyleElement | null = null
 
     async onload(): Promise<void> {
         await this.loadSettings()
         addIcon(QC_ICON_ID, QC_ICON_SVG)
+        this.injectCalloutColors()
 
         this.registerView(
             VIEW_CLIP_MANAGER,
@@ -121,11 +139,30 @@ export default class QuickClipCapturePlugin extends Plugin {
     }
 
     onunload(): void {
+        this.calloutStyleEl?.remove()
+        this.calloutStyleEl = null
         this.app.workspace.detachLeavesOfType(VIEW_CLIP_MANAGER)
+    }
+
+    injectCalloutColors(): void {
+        if (!this.calloutStyleEl) {
+            this.calloutStyleEl = document.createElement('style')
+            this.calloutStyleEl.id = 'quickclip-callout-colors'
+            document.head.appendChild(this.calloutStyleEl)
+        }
+        const colors = { ...DEFAULT_CALLOUT_COLORS, ...this.settings.calloutColors }
+        this.calloutStyleEl.textContent = Object.entries(colors)
+            .map(([type, hex]) => {
+                const [r, g, b] = hexToRgb(hex)
+                return `.callout[data-callout="${type}"] { --callout-color: ${r}, ${g}, ${b}; }`
+            })
+            .join('\n')
     }
 
     async loadSettings(): Promise<void> {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData())
+        // Ensure calloutColors has all keys (handles upgrades from older versions)
+        this.settings.calloutColors = { ...DEFAULT_CALLOUT_COLORS, ...this.settings.calloutColors }
     }
 
     async saveSettings(): Promise<void> {
