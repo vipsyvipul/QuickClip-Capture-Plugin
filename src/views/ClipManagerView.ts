@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, TFile, Notice, setIcon } from 'obsidian'
 import QuickClipCapturePlugin from '../main'
-import { loadIndex, getAllClips, deleteClip, updateContentType, updateClipTags, updateClipNote, invalidateIndexCache } from '../clipsIndex'
+import { loadIndex, saveIndex, getAllClips, deleteClip, updateContentType, updateClipTags, updateClipNote, invalidateIndexCache } from '../clipsIndex'
 import { ClipRef, Clip, ContentType } from '../types'
 
 export const VIEW_CLIP_MANAGER = 'quickclip-manager'
@@ -232,6 +232,7 @@ export class ClipManagerView extends ItemView {
                         const snippet = stripMarkdown(snippetLines.join(' '))
                         if (snippet) this.snippetCache.set(clipKey(ref), snippet)
                     }
+                    this.syncTagsFromFile(ref, lines, detailsIdx !== -1 ? detailsIdx : hashLineIdx, hashLineIdx, true)
                     return
                 }
             }
@@ -276,6 +277,7 @@ export class ClipManagerView extends ItemView {
                 const snippet = stripMarkdown(quoteLines.join(' '))
                 if (snippet) this.snippetCache.set(clipKey(ref), snippet)
             }
+            this.syncTagsFromFile(ref, lines, capturedIdx - 5, capturedIdx + 5, false)
         }
     }
 
@@ -764,6 +766,7 @@ export class ClipManagerView extends ItemView {
                     td.textContent = formatDate(ref.clip.savedAt, this.plugin.settings.dateFormat)
                     break
                 case 'tags':
+                    td.addClass('qc-cell--tags')
                     this.renderEditableTags(td, ref)
                     break
                 case 'note':
@@ -836,6 +839,24 @@ export class ClipManagerView extends ItemView {
             noteInput.dataset.saved = noteText
             noteInput.dispatchEvent(new Event('input'))
         }
+        const tagsCell = tr.querySelector<HTMLElement>('.qc-cell--tags')
+        if (tagsCell) { tagsCell.empty(); this.renderEditableTags(tagsCell, ref) }
+    }
+
+    private syncTagsFromFile(ref: ClipRef, lines: string[], from: number, to: number, newFormat: boolean): void {
+        const pattern = newFormat ? /^> > \| Tags \| (.*?) \|/ : /^\| Tags \| (.*?) \|/
+        const tagsLine = lines.slice(Math.max(0, from), to + 1).find(l => pattern.test(l))
+        if (!tagsLine) return
+        const m = tagsLine.match(pattern)
+        if (!m) return
+        const fileTags = m[1].trim().split(/\s+/).filter(Boolean).map(t => t.replace(/^#/, ''))
+        const curr = ref.clip.tags ?? []
+        if (fileTags.length === curr.length && fileTags.every(t => curr.includes(t))) return
+        ref.clip.tags = fileTags
+        loadIndex(this.app).then(idx => {
+            const clip = idx[ref.url]?.clips.find(c => c.hash === ref.clip.hash)
+            if (clip) { clip.tags = fileTags; saveIndex(this.app, idx) }
+        })
     }
 
     private renderEditableNote(td: HTMLElement, ref: ClipRef): void {
