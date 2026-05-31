@@ -193,9 +193,52 @@ export class ClipManagerView extends ItemView {
             if (!this.snippetCache.has(clipKey(ref)))
                 this.snippetCache.set(clipKey(ref), timestamp)
         } else {
+            const lines = content.split('\n')
+
+            // New format: find by hash anchor
+            if (ref.clip.hash) {
+                const hashLineIdx = lines.findIndex(l => l.includes(`| QuickClip Hash | ${ref.clip.hash} |`))
+                if (hashLineIdx !== -1) {
+                    let parentIdx = -1
+                    for (let i = hashLineIdx - 1; i >= 0; i--) {
+                        if (/^> \[!qc_/.test(lines[i])) { parentIdx = i; break }
+                    }
+                    const detailsIdx = lines.findIndex((l, i) => i > (parentIdx !== -1 ? parentIdx : 0) && i < hashLineIdx && /^> > \[!qc_details\]/.test(l))
+                    const noteLineIdx = lines.findIndex((l, i) => i > (parentIdx !== -1 ? parentIdx : 0) && i < (detailsIdx !== -1 ? detailsIdx : hashLineIdx) && /^> > \[!qc_note\]/.test(l))
+
+                    this.noteCache.set(clipKey(ref), noteLineIdx !== -1)
+                    if (noteLineIdx !== -1) {
+                        const noteLines: string[] = []
+                        for (let j = noteLineIdx + 1; j < lines.length; j++) {
+                            if (!lines[j].startsWith('> > ')) break
+                            noteLines.push(lines[j].slice(4).trim())
+                        }
+                        this.noteTextCache.set(clipKey(ref), noteLines.join('\n'))
+                    } else {
+                        this.noteTextCache.set(clipKey(ref), '')
+                    }
+
+                    if (!this.snippetCache.has(clipKey(ref)) && !ref.clip.text && parentIdx !== -1) {
+                        const snippetLines: string[] = []
+                        for (let j = parentIdx + 1; j < lines.length; j++) {
+                            if (lines[j].startsWith('> > ') || lines[j] === '---') break
+                            if (lines[j] === '>' || lines[j] === '') continue
+                            if (lines[j].startsWith('> ')) {
+                                const text = lines[j].slice(2).trim()
+                                if (/^\[.*\]\(.*\)$/.test(text)) continue // skip source link
+                                snippetLines.push(text)
+                            }
+                        }
+                        const snippet = stripMarkdown(snippetLines.join(' '))
+                        if (snippet) this.snippetCache.set(clipKey(ref), snippet)
+                    }
+                    return
+                }
+            }
+
+            // Old format: find by captured date anchor
             const date = new Date(ref.clip.savedAt)
             const capturedStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
-            const lines = content.split('\n')
             const capturedIdx = lines.findIndex(l => l.includes(`| Captured | ${capturedStr} |`))
             if (capturedIdx === -1) {
                 this.noteCache.set(clipKey(ref), false); this.noteTextCache.set(clipKey(ref), ''); return
@@ -207,7 +250,6 @@ export class ClipManagerView extends ItemView {
             if (quoteIdx === -1) {
                 this.noteCache.set(clipKey(ref), false); this.noteTextCache.set(clipKey(ref), ''); return
             }
-            // Find [!note] block before [!quote] and extract its text
             let noteBlockStart = -1
             let ni = quoteIdx - 1
             while (ni >= 0 && lines[ni] === '') ni--
@@ -888,11 +930,22 @@ export class ClipManagerView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(clip.path)
         if (!(file instanceof TFile)) return 0
         const content = await this.app.vault.read(file)
+        const lines = content.split('\n')
+
+        // New format: find by hash, walk back to parent callout opener
+        if (clip.hash) {
+            const hashLineIdx = lines.findIndex(l => l.includes(`| QuickClip Hash | ${clip.hash} |`))
+            if (hashLineIdx !== -1) {
+                for (let i = hashLineIdx - 1; i >= 0; i--) {
+                    if (/^> \[!qc_/.test(lines[i])) return i
+                }
+            }
+        }
+
+        // Old format: find by captured date, walk back to > [!quote]
         const date = new Date(clip.savedAt)
         const capturedStr = `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} \\| ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
-        const capturedMarker = `| Captured | ${capturedStr} |`
-        const lines = content.split('\n')
-        const capturedLineIdx = lines.findIndex(l => l.includes(capturedMarker))
+        const capturedLineIdx = lines.findIndex(l => l.includes(`| Captured | ${capturedStr} |`))
         if (capturedLineIdx === -1) return 0
         for (let i = capturedLineIdx - 1; i >= 0; i--) {
             if (lines[i].startsWith('> [!quote]')) return i
