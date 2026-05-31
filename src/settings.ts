@@ -103,6 +103,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
 
         const colorInputs: Record<string, HTMLInputElement> = {}
         const colorResetUpdaters: Array<() => void> = []
+        let colorSaveTimer: ReturnType<typeof setTimeout> | null = null
 
         for (const { key, label } of CALLOUT_COLOR_ROWS) {
             const s = new Setting(details).setName(label)
@@ -120,11 +121,12 @@ export class QuickClipSettingTab extends PluginSettingTab {
             }
             updateRowReset()
             colorResetUpdaters.push(updateRowReset)
-            input.addEventListener('input', async () => {
+            input.addEventListener('input', () => {
                 this.plugin.settings.calloutColors[key] = input.value
-                await this.plugin.saveSettings()
                 this.plugin.injectCalloutColors()
                 updateRowReset()
+                if (colorSaveTimer) clearTimeout(colorSaveTimer)
+                colorSaveTimer = setTimeout(() => { this.plugin.saveSettings() }, 300)
             })
             rowReset.addEventListener('click', async () => {
                 this.plugin.settings.calloutColors[key] = DEFAULT_CALLOUT_COLORS[key]
@@ -163,7 +165,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
 
         const stored = this.plugin.settings.lastMigrationReport
 
-        if (!(stored && this.nothingToMigrate(stored))) {
+        if (!(stored && stored.results.length === 0)) {
             hasOldFormatClips(this.app).then(hasOld => {
                 if (hasOld) migrateSection.style.display = ''
             })
@@ -201,7 +203,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
             statusEl.empty()
             this.renderMigrationResults(statusEl, result)
 
-            if (this.nothingToMigrate(result)) {
+            if (result.results.length === 0) {
                 migrateSection.style.display = 'none'
             } else {
                 migrateBtn.disabled = false

@@ -237,6 +237,12 @@ export async function hasOldFormatClips(app: App): Promise<boolean> {
             if (/^> \[!(quote|clip)\]/im.test(content)) return true
         }
     }
+    // Also check markdown files not referenced in the index
+    for (const file of app.vault.getMarkdownFiles()) {
+        if (seen.has(file.path)) continue
+        const content = await app.vault.read(file)
+        if (/^> \[!(quote|clip)\]/im.test(content)) return true
+    }
     return false
 }
 
@@ -250,11 +256,16 @@ export async function migrateOldFormatClips(app: App): Promise<MigrationReport> 
     type IndexEntry = { url: string; clip: any }
     const fileToClips = new Map<string, IndexEntry[]>()
     for (const [url, entry] of Object.entries(index)) {
-        for (const clip of entry.clips) {
+        for (const clip of (entry.clips ?? [])) {
             if (!clip.path) continue
             if (!fileToClips.has(clip.path)) fileToClips.set(clip.path, [])
             fileToClips.get(clip.path)!.push({ url, clip })
         }
+    }
+
+    // Also include unindexed markdown files that may contain old-format clips
+    for (const file of app.vault.getMarkdownFiles()) {
+        if (!fileToClips.has(file.path)) fileToClips.set(file.path, [])
     }
 
     let indexModified = false
@@ -263,7 +274,9 @@ export async function migrateOldFormatClips(app: App): Promise<MigrationReport> 
         const file = app.vault.getAbstractFileByPath(filePath)
         if (!(file instanceof TFile)) continue
 
-        const lines = (await app.vault.read(file)).split('\n')
+        const content = await app.vault.read(file)
+        if (!/^> \[!(quote|clip)\]/im.test(content)) { report.skipped++; continue }
+        const lines = content.split('\n')
         const blocks = findOldBlocks(lines)
         if (blocks.length === 0) { report.skipped++; continue }
 
@@ -306,7 +319,16 @@ export async function migrateOldFormatClips(app: App): Promise<MigrationReport> 
                     continue
                 }
 
-                if (matches.length === 1) hash = matches[0].clip.hash ?? null
+                if (matches.length === 1) {
+                    if (matches[0].clip.hash) {
+                        hash = matches[0].clip.hash
+                    } else {
+                        // Index entry exists but hash is missing — generate and patch in place
+                        hash = generateHash(filePath + block.captured)
+                        matches[0].clip.hash = hash
+                        indexModified = true
+                    }
+                }
             }
 
             // ── Orphaned: not in index ─────────────────────────────────────
@@ -320,31 +342,35 @@ export async function migrateOldFormatClips(app: App): Promise<MigrationReport> 
                     if (hm) { url = hm[1]; break }
                 }
 
-                if (url) {
-                    const qcType = TITLE_TO_QC[block.calloutTitle.toLowerCase()] ?? 'qc_highlight'
-                    const clipType = qcType === 'qc_highlight' ? 'highlight'
-                        : qcType === 'qc_tweet' ? 'tweet'
-                        : qcType === 'qc_pdf_highlight' ? 'pdf-highlight'
-                        : 'image'
-                    const savedAt = parseCapturedToIso(block.captured)
-                    const tags = (block.tableRows.get('Tags') ?? '')
-                        .split(/\s+/).filter(Boolean).map((t: string) => t.replace(/^#/, ''))
-
-                    const newClip: any = { clip_type: clipType, hash, savedAt, path: filePath, tags }
-                    if (clipType === 'highlight')
-                        newClip.text = block.contentLines.join(' ').slice(0, 500)
-
-                    if (!index[url]) {
-                        const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
-                        index[url] = {
-                            title: '', content_type: 'article', type: 'Note',
-                            organized: false, archived: false, belongs_to: '', related_to: [],
-                            domain, first_clipped: savedAt, last_clipped: savedAt, clips: [],
-                        }
-                    }
-                    index[url].clips.push(newClip)
-                    indexModified = true
+                if (!url) {
+                    report.results.push({ filePath, preview, status: 'error',
+                        reason: 'Clip is not in clipsHistory.json and no URL heading found — skipped' })
+                    continue
                 }
+
+                const qcType = TITLE_TO_QC[block.calloutTitle.toLowerCase()] ?? 'qc_highlight'
+                const clipType = qcType === 'qc_highlight' ? 'highlight'
+                    : qcType === 'qc_tweet' ? 'tweet'
+                    : qcType === 'qc_pdf_highlight' ? 'pdf-highlight'
+                    : 'image'
+                const savedAt = parseCapturedToIso(block.captured)
+                const tags = (block.tableRows.get('Tags') ?? '')
+                    .split(/\s+/).filter(Boolean).map((t: string) => t.replace(/^#/, ''))
+
+                const newClip: any = { clip_type: clipType, hash, savedAt, path: filePath, tags }
+                if (clipType === 'highlight')
+                    newClip.text = block.contentLines.join(' ').slice(0, 500)
+
+                if (!index[url]) {
+                    const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
+                    index[url] = {
+                        title: '', content_type: 'article', type: 'Note',
+                        organized: false, archived: false, belongs_to: '', related_to: [],
+                        domain, first_clipped: savedAt, last_clipped: savedAt, clips: [],
+                    }
+                }
+                index[url].clips.push(newClip)
+                indexModified = true
 
                 report.results.push({ filePath, preview, status: 'warning',
                     reason: 'Clip was not in clipsHistory.json — reconstructed and added' })
