@@ -284,7 +284,7 @@ async function removeHighlightFromFile(app: App, clip: Clip): Promise<void> {
         }
     }
 
-    if (blockStart > 0 && lines[blockStart - 1].startsWith('> ') || lines[blockStart - 1] === '') {
+    if (blockStart > 0 && (lines[blockStart - 1].startsWith('> ') || lines[blockStart - 1] === '')) {
         for (let i = blockStart - 1; i >= 0; i--) {
             if (lines[i].startsWith('> [!note]')) {
                 blockStart = i
