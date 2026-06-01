@@ -129,7 +129,7 @@ export default class QuickClipCapturePlugin extends Plugin {
         if (this.settings.autoOpenOnStartup)
             this.app.workspace.onLayoutReady(() => this.activateView())
 
-        this.addRibbonIcon(QC_ICON_ID, 'QuickClip Capture', () => this.activateView())
+        this.addRibbonIcon(QC_ICON_ID, 'QuickClip Capture Manager', () => this.activateView())
 
         this.addCommand({
             id: 'open-manager',

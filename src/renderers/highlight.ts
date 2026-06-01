@@ -237,10 +237,20 @@ async function buildCard(
             link.rel = 'noopener'
             leftGroup.appendChild(link)
         } else if (sourceLabel) {
-            const localEl = document.createElement('span')
-            localEl.className = 'qc-captured'
-            localEl.textContent = sourceLabel
-            leftGroup.appendChild(localEl)
+            if (clipUrl?.startsWith('file://')) {
+                const link = document.createElement('a')
+                link.className = 'qc-view-link external-link'
+                link.textContent = sourceLabel
+                link.href = clipUrl
+                link.target = '_blank'
+                link.rel = 'noopener'
+                leftGroup.appendChild(link)
+            } else {
+                const localEl = document.createElement('span')
+                localEl.className = 'qc-captured'
+                localEl.textContent = sourceLabel
+                leftGroup.appendChild(localEl)
+            }
         }
         if (pageNum) {
             const pageEl = document.createElement('span')
@@ -252,7 +262,7 @@ async function buildCard(
         const link = document.createElement('a')
         link.href = viewHref
         link.className = 'qc-view-link external-link'
-        link.textContent = 'View at source ↗'
+        link.textContent = clipType === 'tweet' ? 'View tweet ↗' : 'View with highlight ↗'
         link.target = '_blank'
         link.rel = 'noopener'
         leftGroup.appendChild(link)
@@ -498,8 +508,16 @@ async function buildCardV2(
             link.textContent = sourceLabel || 'Open PDF ↗'; link.target = '_blank'; link.rel = 'noopener'
             leftGroup.appendChild(link)
         } else if (sourceLabel) {
-            const localEl = document.createElement('span'); localEl.className = 'qc-captured'
-            localEl.textContent = sourceLabel; leftGroup.appendChild(localEl)
+            if (clipUrl?.startsWith('file://')) {
+                const link = document.createElement('a')
+                link.className = 'qc-view-link external-link'
+                link.textContent = sourceLabel
+                link.href = clipUrl; link.target = '_blank'; link.rel = 'noopener'
+                leftGroup.appendChild(link)
+            } else {
+                const localEl = document.createElement('span'); localEl.className = 'qc-captured'
+                localEl.textContent = sourceLabel; leftGroup.appendChild(localEl)
+            }
         }
         if (pageNum) {
             const pageEl = document.createElement('span'); pageEl.className = 'qc-pdf-page'
@@ -508,7 +526,8 @@ async function buildCardV2(
     } else if (viewHref) {
         const link = document.createElement('a')
         link.href = viewHref; link.className = 'qc-view-link external-link'
-        link.textContent = 'View at source ↗'; link.target = '_blank'; link.rel = 'noopener'
+        link.textContent = clipType === 'tweet' ? 'View tweet ↗' : 'View with highlight ↗'
+        link.target = '_blank'; link.rel = 'noopener'
         leftGroup.appendChild(link)
     }
     actionsEl.appendChild(leftGroup)

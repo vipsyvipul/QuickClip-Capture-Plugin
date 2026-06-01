@@ -1,5 +1,5 @@
 {
-  "name": "quickclip-capture",
+  "name": "quickclip-capture-manager",
   "version": "1.0.0",
   "description": "Renders and manages clips saved by the QuickClip Capture browser extension.",
   "main": "main.js",
