@@ -515,8 +515,6 @@ th[data-col-key="has_notes"] {
 
 .qc-tag-remove {
     all: unset;
-    background: transparent !important;
-    box-shadow: none !important;
     cursor: pointer;
     font-size: 0.8em;
     line-height: 1;
@@ -967,9 +965,6 @@ th[data-col-key="has_notes"] {
     padding: 0 4px;
     display: inline-flex;
     align-items: center;
-    background: none !important;
-    border: none !important;
-    box-shadow: none !important;
 }
 
 .qc-color-row-reset:hover {
