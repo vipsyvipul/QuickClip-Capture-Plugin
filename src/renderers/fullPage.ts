@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, TFile } from 'obsidian'
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, TFile, setIcon } from 'obsidian'
 
 type ProgressBar = HTMLElement & { _cleanup?: () => void }
 
@@ -15,8 +15,54 @@ function formatDate(dateStr: string): string {
     return `${day}${suffix(day)} ${MONTHS[month - 1]} ${year}`
 }
 
-export function processFullPage(_app: App, _el: HTMLElement, _ctx: MarkdownPostProcessorContext): void {
-    // header/progress injected via injectFullPageHeader on active-leaf-change
+export function processFullPage(app: App, el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
+    // Render standalone [!qc_note] in full-page files as a slim annotation bar
+    const noteCallout = el.querySelector<HTMLElement>('[data-callout="qc_note"]')
+    if (!noteCallout) return
+
+    const file = app.vault.getAbstractFileByPath(ctx.sourcePath)
+    if (!(file instanceof TFile)) return
+    const meta = app.metadataCache.getFileCache(file)
+    if (meta?.frontmatter?.['clip_type'] !== 'full-page') return
+
+    ctx.addChild(new FullPageNoteScanner(el, noteCallout))
+}
+
+class FullPageNoteScanner extends MarkdownRenderChild {
+    constructor(el: HTMLElement, private noteCallout: HTMLElement) {
+        super(el)
+    }
+
+    onload(): void {
+        const tryRender = () => {
+            if (!this.containerEl.parentElement) { requestAnimationFrame(tryRender); return }
+            if (!this.containerEl.closest('.markdown-reading-view')) return
+            this.render()
+        }
+        tryRender()
+    }
+
+    private render(): void {
+        const content = this.noteCallout.querySelector<HTMLElement>('.callout-content')
+        if (!content) return
+
+        const bar = document.createElement('div')
+        bar.className = 'qc-fullpage-note'
+
+        const iconEl = document.createElement('span')
+        iconEl.className = 'qc-fullpage-note-icon'
+        setIcon(iconEl, 'message-circle')
+
+        const textEl = document.createElement('div')
+        textEl.className = 'qc-fullpage-note-text'
+        Array.from(content.childNodes).forEach(n => textEl.appendChild(n.cloneNode(true)))
+
+        bar.appendChild(iconEl)
+        bar.appendChild(textEl)
+
+        this.containerEl.innerHTML = ''
+        this.containerEl.appendChild(bar)
+    }
 }
 
 export function injectFullPageHeader(app: App, container: HTMLElement, sourcePath: string): void {

@@ -38,6 +38,9 @@ function transformSection(app: App, sourcePath: string, confirmDelete: () => boo
 
     // New format: metadata is nested inside the callout — no sibling table needed
     if ((callout.dataset.callout ?? '').startsWith('qc_')) {
+        // qc_note and qc_details are meta callouts, never standalone cards
+        const ct = callout.dataset.callout ?? ''
+        if (ct === 'qc_note' || ct === 'qc_details') return
         buildCardV2(app, sourcePath, confirmDelete, calloutSection, callout)
         return
     }

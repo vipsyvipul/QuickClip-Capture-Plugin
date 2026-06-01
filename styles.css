@@ -238,6 +238,42 @@
     white-space: nowrap;
 }
 
+/* ── Full-page annotation bar ───────────────────────────────── */
+
+.qc-fullpage-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    margin: 0 0 20px;
+    border-left: 3px solid var(--color-accent);
+    background: var(--background-secondary);
+    border-radius: 0 4px 4px 0;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.qc-fullpage-note-icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.qc-fullpage-note-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.qc-fullpage-note-text {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-muted);
+}
+
+.qc-fullpage-note-text p {
+    margin: 0;
+}
+
 /* ── Clip Manager View ──────────────────────────────────────── */
 
 .qc-manager {
