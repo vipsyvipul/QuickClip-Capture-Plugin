@@ -320,6 +320,23 @@ async function buildCard(
     const card = document.createElement('div')
     card.className = 'qc-highlight-card'
 
+    const cardHeader = document.createElement('div')
+    cardHeader.className = 'qc-card-header'
+    const chevronEl = document.createElement('span')
+    chevronEl.className = 'qc-card-chevron'
+    setIcon(chevronEl, 'chevron-down')
+    const headerSummary = document.createElement('span')
+    headerSummary.className = 'qc-card-header-summary'
+    const summaryText = (quoteEl.textContent?.trim() ?? '').slice(0, 60)
+    headerSummary.textContent = summaryText ? `${badgeCfg.label} — ${summaryText}` : badgeCfg.label
+    cardHeader.appendChild(chevronEl)
+    cardHeader.appendChild(headerSummary)
+    cardHeader.addEventListener('click', () => card.classList.toggle('qc-card-collapsed'))
+    card.appendChild(cardHeader)
+
+    const cardBody = document.createElement('div')
+    cardBody.className = 'qc-card-body'
+
     if (noteSection) {
         const noteCallout = noteSection.querySelector('[data-callout="note"]')
         if (noteCallout) {
@@ -337,21 +354,20 @@ async function buildCard(
                 calloutContent.remove()
             }
 
-            card.appendChild(cloned)
+            cardBody.appendChild(cloned)
         }
     }
 
     let tweetEmbedEl: HTMLElement | null = null
     if (clipType === 'tweet' && clipUrl) {
-        // Placeholder appended now; embed rendered after card is in the live DOM
-        // so Obsidian's embed provider can initialize correctly.
         tweetEmbedEl = document.createElement('div')
         tweetEmbedEl.className = 'qc-tweet-embed'
-        card.appendChild(tweetEmbedEl)
+        cardBody.appendChild(tweetEmbedEl)
     } else {
-        card.appendChild(quoteBlock)
+        cardBody.appendChild(quoteBlock)
     }
-    card.appendChild(footer)
+    cardBody.appendChild(footer)
+    card.appendChild(cardBody)
 
     // Save scroll position before any DOM mutations so the browser's scroll
     // anchor algorithm can't snap the view when content height changes.
@@ -568,6 +584,19 @@ async function buildCardV2(
 
     const card = document.createElement('div'); card.className = 'qc-highlight-card'
 
+    const cardHeader = document.createElement('div'); cardHeader.className = 'qc-card-header'
+    const chevronEl = document.createElement('span'); chevronEl.className = 'qc-card-chevron'
+    setIcon(chevronEl, 'chevron-down')
+    const headerSummary = document.createElement('span'); headerSummary.className = 'qc-card-header-summary'
+    const summaryText = (quoteContentEl.textContent?.trim() ?? '').slice(0, 60)
+    headerSummary.textContent = summaryText ? `${badgeCfg.label} — ${summaryText}` : badgeCfg.label
+    cardHeader.appendChild(chevronEl)
+    cardHeader.appendChild(headerSummary)
+    cardHeader.addEventListener('click', () => card.classList.toggle('qc-card-collapsed'))
+    card.appendChild(cardHeader)
+
+    const cardBody = document.createElement('div'); cardBody.className = 'qc-card-body'
+
     if (noteCallout) {
         const cloned = noteCallout.cloneNode(true) as HTMLElement
         cloned.classList.add('qc-note-callout')
@@ -578,17 +607,18 @@ async function buildCardV2(
             Array.from(calloutContent.childNodes).forEach(n => calloutTitle.appendChild(n))
             calloutContent.remove()
         }
-        card.appendChild(cloned)
+        cardBody.appendChild(cloned)
     }
 
     let tweetEmbedEl: HTMLElement | null = null
     if (clipType === 'tweet' && clipUrl) {
         tweetEmbedEl = document.createElement('div'); tweetEmbedEl.className = 'qc-tweet-embed'
-        card.appendChild(tweetEmbedEl)
+        cardBody.appendChild(tweetEmbedEl)
     } else {
-        card.appendChild(quoteBlock)
+        cardBody.appendChild(quoteBlock)
     }
-    card.appendChild(footer)
+    cardBody.appendChild(footer)
+    card.appendChild(cardBody)
 
     const scrollEl = calloutSection.closest('.markdown-preview-view') as HTMLElement | null
     const savedScrollTop = scrollEl?.scrollTop
