@@ -1,6 +1,7 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownRenderer, setIcon } from 'obsidian'
 import { loadIndex, deleteClip, invalidateIndexCache } from '../clipsIndex'
-import { X_ICON_ID } from '../main'
+
+const X_ICON_ID = 'qc-x-brand'
 
 export function processHighlight(app: App, el: HTMLElement, ctx: MarkdownPostProcessorContext, confirmDelete: () => boolean): void {
     if (el.closest('.cm-editor')) return
