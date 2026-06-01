@@ -315,10 +315,10 @@ async function updateFullPageNote(app: App, file: TFile, noteText: string): Prom
     const fmEnd = lines.indexOf('---', 1)
     if (fmEnd === -1) return
 
-    const noteIdx = lines.findIndex((l, i) => i > fmEnd && /^>\s*\[!note\]/i.test(l))
+    const noteIdx = lines.findIndex((l, i) => i > fmEnd && /^>\s*\[!qc_note\]/i.test(l))
 
     if (noteText) {
-        const newBlock = [`> [!note]`, ...noteText.split('\n').map(l => `> ${l}`)]
+        const newBlock = [`> [!qc_note]- Note`, ...noteText.split('\n').map(l => `> ${l}`)]
         if (noteIdx !== -1) {
             let noteEnd = noteIdx + 1
             while (noteEnd < lines.length && lines[noteEnd].startsWith('>')) noteEnd++

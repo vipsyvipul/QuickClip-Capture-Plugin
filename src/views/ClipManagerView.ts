@@ -154,7 +154,7 @@ export class ClipManagerView extends ItemView {
             const bodyStart = content.indexOf('\n---\n', 4)
             const body = bodyStart !== -1 ? content.slice(bodyStart + 5) : content
             const bodyLines = body.split('\n')
-            const noteStart = bodyLines.findIndex(l => /^>\s*\[!note\]/i.test(l))
+            const noteStart = bodyLines.findIndex(l => /^>\s*\[!qc_note\]/i.test(l))
             this.noteCache.set(clipKey(ref), noteStart !== -1)
             if (noteStart !== -1) {
                 const noteLines: string[] = []
