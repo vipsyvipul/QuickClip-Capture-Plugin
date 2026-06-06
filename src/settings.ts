@@ -97,7 +97,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
 
         // ── Callout Colors (collapsible) ─────────────────────────────────────
         const details = containerEl.createEl('details', { cls: 'qc-colors-details' })
-        const summary = details.createEl('summary', { cls: 'qc-colors-summary', text: 'Callout Colors' })
+        details.createEl('summary', { cls: 'qc-colors-summary', text: 'Callout Colors' })
 
         const colorInputs: Record<string, HTMLInputElement> = {}
         const colorResetUpdaters: Array<() => void> = []
@@ -306,7 +306,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
         link.addEventListener('click', e => {
             e.preventDefault()
             const file = this.app.vault.getAbstractFileByPath(issue.filePath)
-            if (file instanceof TFile) this.app.workspace.getLeaf(false).openFile(file)
+            if (file instanceof TFile) void this.app.workspace.getLeaf(false).openFile(file)
         })
     }
 

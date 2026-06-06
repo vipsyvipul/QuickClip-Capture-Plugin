@@ -173,8 +173,12 @@ function buildNewBlock(block: OldBlock, hash: string): string {
     if (qcType === 'qc_highlight') {
         const open = block.tableRows.get('Open')
         if (open) {
-            sourceLink = open.replace(/\[([^\]]+)\]\(([^)]+)\)/, (_, text, url) =>
-                `[${text.includes('↗') ? text : text + ' ↗'}](${url})`)
+            const m = open.match(/\[([^\]]+)\]\(([^)]+)\)/)
+            if (m) {
+                const text = m[1] ?? ''
+                const href = m[2] ?? ''
+                sourceLink = `[${text.includes('↗') ? text : text + ' ↗'}](${href})`
+            }
         }
     } else if (qcType === 'qc_tweet') {
         const viewTweet = block.tableRows.get('View tweet')

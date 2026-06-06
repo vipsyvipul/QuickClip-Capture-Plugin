@@ -15,7 +15,7 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
     const frontmatter = app.metadataCache.getFileCache(tfile)?.frontmatter
     if (frontmatter?.['clip_type'] !== 'video-clip') return
 
-    const url: string = frontmatter.url
+    const url = typeof frontmatter.url === 'string' ? frontmatter.url : ''
     if (!url) return
 
     const section = containerEl.querySelector('.markdown-preview-section')

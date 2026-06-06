@@ -726,7 +726,7 @@ export class ClipManagerView extends ItemView {
                     const snippet = raw.length > len ? raw.slice(0, len) + '…' : raw
                     const snippetLink = td.createEl('a', { cls: 'qc-snippet-link', text: snippet })
                     snippetLink.title = ref.clip.text ?? raw
-                    snippetLink.addEventListener('click', (e) => { e.preventDefault(); this.openClip(ref) })
+                    snippetLink.addEventListener('click', (e) => { e.preventDefault(); void this.openClip(ref) })
                     break
                 }
                 case 'clip_type': {
@@ -755,7 +755,7 @@ export class ClipManagerView extends ItemView {
                     td.addClass('qc-cell--title')
                     const titleLink = td.createEl('a', { cls: 'qc-cell-link', text: ref.pageTitle ?? '' })
                     titleLink.title = ref.pageTitle ?? ''
-                    titleLink.addEventListener('click', (e) => { e.preventDefault(); this.openClip(ref) })
+                    titleLink.addEventListener('click', (e) => { e.preventDefault(); void this.openClip(ref) })
                     break
                 }
                 case 'domain':
@@ -784,7 +784,7 @@ export class ClipManagerView extends ItemView {
                         : fullPath
                     const pathLink = td.createEl('a', { cls: 'qc-cell-link', text: displayPath })
                     pathLink.title = fullPath
-                    pathLink.addEventListener('click', (e) => { e.preventDefault(); this.openClip(ref) })
+                    pathLink.addEventListener('click', (e) => { e.preventDefault(); void this.openClip(ref) })
                     break
                 }
             }

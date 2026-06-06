@@ -95,7 +95,7 @@ export default class QuickClipCapturePlugin extends Plugin {
                 if (!(view instanceof MarkdownView)) return
                 if (view.getMode() !== 'preview') return
 
-                setTimeout(() => {
+                window.setTimeout(() => {
                     const section = view.containerEl.querySelector('.markdown-preview-section')
                     if (section) scanAndTransform(this.app, section as HTMLElement, view.file?.path ?? '', () => this.settings.confirmDelete)
                     injectFullPageHeader(this.app, view.containerEl, view.file?.path ?? '')
@@ -111,7 +111,7 @@ export default class QuickClipCapturePlugin extends Plugin {
                 const view = this.app.workspace.getActiveViewOfType(MarkdownView)
                 if (!view || view.getMode() !== 'preview') return
                 if (view.file?.path !== file.path) return
-                setTimeout(() => {
+                window.setTimeout(() => {
                     injectVideoClipView(this.app, view.containerEl, file.path, () => this.settings.confirmDelete)
                 }, 300)
             })
@@ -156,7 +156,8 @@ export default class QuickClipCapturePlugin extends Plugin {
     }
 
     async loadSettings(): Promise<void> {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData())
+        const loaded = await this.loadData() as Partial<PluginSettings>
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded)
         // Ensure calloutColors has all keys (handles upgrades from older versions)
         this.settings.calloutColors = { ...DEFAULT_CALLOUT_COLORS, ...this.settings.calloutColors }
     }
@@ -168,10 +169,10 @@ export default class QuickClipCapturePlugin extends Plugin {
     private async activateView(): Promise<void> {
         const { workspace } = this.app
         const existing = workspace.getLeavesOfType(VIEW_CLIP_MANAGER)[0]
-        if (existing) { workspace.revealLeaf(existing); return }
+        if (existing) { await workspace.revealLeaf(existing); return }
 
         const leaf = workspace.getLeaf(false)
         await leaf.setViewState({ type: VIEW_CLIP_MANAGER, active: true })
-        workspace.revealLeaf(leaf)
+        await workspace.revealLeaf(leaf)
     }
 }

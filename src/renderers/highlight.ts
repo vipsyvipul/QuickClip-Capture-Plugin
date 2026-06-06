@@ -18,7 +18,7 @@ class HighlightScanner extends MarkdownRenderChild {
     onload(): void {
         const tryTransform = () => {
             if (!this.containerEl.parentElement) {
-                activeWindow.requestAnimationFrame(tryTransform)
+                window.requestAnimationFrame(tryTransform)
                 return
             }
             // Only render in Reading view — Live Preview mounts callouts outside
@@ -94,17 +94,19 @@ const BADGE: Record<string, BadgeCfg> = {
 }
 
 const QC_EXPANDED_KEY = 'qc-expanded-clips'
-function getExpandedSet(): Set<string> {
-    try { return new Set(JSON.parse(localStorage.getItem(QC_EXPANDED_KEY) ?? '[]')) }
-    catch { return new Set() }
+function getExpandedSet(app: App): Set<string> {
+    const raw = app.loadLocalStorage(QC_EXPANDED_KEY)
+    if (Array.isArray(raw)) return new Set(raw as string[])
+    return new Set()
 }
-function persistExpanded(key: string, expanded: boolean): void {
-    const set = getExpandedSet()
-    expanded ? set.add(key) : set.delete(key)
-    localStorage.setItem(QC_EXPANDED_KEY, JSON.stringify([...set]))
+function persistExpanded(app: App, key: string, expanded: boolean): void {
+    const set = getExpandedSet(app)
+    if (expanded) set.add(key)
+    else set.delete(key)
+    app.saveLocalStorage(QC_EXPANDED_KEY, [...set])
 }
 
-function buildCardHeader(card: HTMLElement, badgeCfg: BadgeCfg, summaryText: string, persistKey: string): void {
+function buildCardHeader(app: App, card: HTMLElement, badgeCfg: BadgeCfg, summaryText: string, persistKey: string): void {
     const cardHeader = activeDocument.createElement('div')
     cardHeader.className = 'qc-card-header'
     const chevronEl = activeDocument.createElement('span')
@@ -121,7 +123,7 @@ function buildCardHeader(card: HTMLElement, badgeCfg: BadgeCfg, summaryText: str
     cardHeader.appendChild(headerSummary)
     cardHeader.addEventListener('click', () => {
         const nowCollapsed = card.classList.toggle('qc-card-collapsed')
-        persistExpanded(persistKey, !nowCollapsed)
+        persistExpanded(app, persistKey, !nowCollapsed)
     })
     card.appendChild(cardHeader)
 }
@@ -363,9 +365,9 @@ async function buildCard(
     card.className = 'qc-highlight-card'
 
     const persistKey = `${sourcePath}::${captured}`
-    if (!getExpandedSet().has(persistKey)) card.classList.add('qc-card-collapsed')
+    if (!getExpandedSet(app).has(persistKey)) card.classList.add('qc-card-collapsed')
     const raw = quoteEl.textContent?.trim() ?? ''
-    buildCardHeader(card, badgeCfg, raw.length > 60 ? raw.slice(0, 60) + '…' : raw, persistKey)
+    buildCardHeader(app, card, badgeCfg, raw.length > 60 ? raw.slice(0, 60) + '…' : raw, persistKey)
 
     const cardBody = activeDocument.createElement('div')
     cardBody.className = 'qc-card-body'
@@ -625,9 +627,9 @@ async function buildCardV2(
     const card = activeDocument.createElement('div'); card.className = 'qc-highlight-card'
 
     const persistKey = hash || `${sourcePath}::${captured}`
-    if (!getExpandedSet().has(persistKey)) card.classList.add('qc-card-collapsed')
+    if (!getExpandedSet(app).has(persistKey)) card.classList.add('qc-card-collapsed')
     const raw = quoteContentEl.textContent?.trim() ?? ''
-    buildCardHeader(card, badgeCfg, raw.length > 60 ? raw.slice(0, 60) + '…' : raw, persistKey)
+    buildCardHeader(app, card, badgeCfg, raw.length > 60 ? raw.slice(0, 60) + '…' : raw, persistKey)
 
     const cardBody = activeDocument.createElement('div'); cardBody.className = 'qc-card-body'
 

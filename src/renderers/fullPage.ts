@@ -35,7 +35,7 @@ class FullPageNoteScanner extends MarkdownRenderChild {
 
     onload(): void {
         const tryRender = () => {
-            if (!this.containerEl.parentElement) { activeWindow.requestAnimationFrame(tryRender); return }
+            if (!this.containerEl.parentElement) { window.requestAnimationFrame(tryRender); return }
             if (!this.containerEl.closest('.markdown-reading-view')) return
             this.render()
         }
@@ -67,7 +67,7 @@ class FullPageNoteScanner extends MarkdownRenderChild {
 
 export function injectFullPageHeader(app: App, container: HTMLElement, sourcePath: string): void {
     // Clean up any previous injection
-    const existing = container.querySelector('.qc-reading-progress') as ProgressBar | null
+    const existing = container.querySelector<ProgressBar>('.qc-reading-progress')
     if (existing?._cleanup) existing._cleanup()
     existing?.remove()
     container.querySelector('.qc-fullpage-header')?.remove()
@@ -99,8 +99,8 @@ export function injectFullPageHeader(app: App, container: HTMLElement, sourcePat
             header.appendChild(pill)
         }
 
-        if (site) addPill(site)
-        if (author) addPill(author)
+        if (site) addPill(String(site))
+        if (author) addPill(String(author))
         if (published) addPill(formatDate(String(published)))
         if (word_count) {
             addPill(`${Number(word_count).toLocaleString()} words`)

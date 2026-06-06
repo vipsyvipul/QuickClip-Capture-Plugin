@@ -15,8 +15,8 @@ export async function loadIndex(app: App): Promise<ClipsIndex> {
     if (_indexCache) return _indexCache
     try {
         const raw = await app.vault.adapter.read(INDEX_PATH)
-        const parsed = JSON.parse(raw)
-        _indexCache = typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as ClipsIndex : {}
+        const parsed: unknown = JSON.parse(raw)
+        _indexCache = typeof parsed === 'object' && !Array.isArray(parsed) && parsed !== null ? parsed as ClipsIndex : {}
         return _indexCache
     } catch {
         return {}
@@ -53,7 +53,7 @@ export async function deleteClip(app: App, url: string, hash: string): Promise<v
 
     if (clip.clip_type === 'full-page' || clip.clip_type === 'transcript') {
         const file = app.vault.getAbstractFileByPath(clip.path)
-        if (file instanceof TFile) await app.vault.delete(file)
+        if (file instanceof TFile) await app.fileManager.trashFile(file)
     } else if (clip.clip_type === 'video-clip') {
         // Never delete the video file — the embed and table structure should remain
         await removeVideoClipRow(app, clip)
@@ -152,10 +152,6 @@ async function updateHighlightTags(app: App, file: TFile, clip: Clip, tags: stri
     if (clip.hash) {
         const hashLineIdx = lines.findIndex(l => l.includes(`| QuickClip Hash | ${clip.hash} |`))
         if (hashLineIdx !== -1) {
-            let blockEnd = lines.length
-            for (let i = hashLineIdx + 1; i < lines.length; i++) {
-                if (lines[i] === '---') { blockEnd = i; break }
-            }
             // Tags row sits between Captured and Hash in the details table — search from details opener
             let detailsIdx = -1
             for (let i = hashLineIdx - 1; i >= 0; i--) {
