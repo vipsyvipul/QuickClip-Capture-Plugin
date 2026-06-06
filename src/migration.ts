@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian'
 import { loadIndex, saveIndex } from './clipsIndex'
+import { Clip, ClipsIndex } from './types'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -51,8 +52,8 @@ function clipPreview(lines: string[], max = 50): string {
 // Parse a markdown table row, correctly handling \| escaped pipes inside cells
 function parseTableRow(line: string): [string, string] | null {
     // Replace escaped pipes with a placeholder so split only hits real column separators
-    const unescaped = line.replace(/\\\|/g, '\x00')
-    const cells = unescaped.split('|').map(c => c.trim().replace(/\x00/g, '\\|')).filter(Boolean)
+    const unescaped = line.replace(/\\\|/g, '')
+    const cells = unescaped.split('|').map(c => c.trim().replace(//g, '\\|')).filter(Boolean)
     if (cells.length < 2 || cells[0] === '---') return null
     return [cells[0], cells[1]]
 }
@@ -75,7 +76,7 @@ function findOldBlocks(lines: string[]): OldBlock[] {
     let i = 0
 
     while (i < lines.length) {
-        const m = lines[i].match(/^> \[!(quote|clip)\][+\-]?\s*(.*)/i)
+        const m = lines[i].match(/^> \[!(quote|clip)\][-+]?\s*(.*)/i)
         if (!m) { i++; continue }
 
         const calloutLine = i
@@ -227,8 +228,8 @@ function buildNewBlock(block: OldBlock, hash: string): string {
 async function processOneFile(
     app: App,
     filePath: string,
-    clipsForFile: Array<{ url: string; clip: any }>,
-    index: Record<string, any>,
+    clipsForFile: Array<{ url: string; clip: Clip }>,
+    index: ClipsIndex,
     report: MigrationReport
 ): Promise<{ fileModified: boolean; indexModified: boolean }> {
     const file = app.vault.getAbstractFileByPath(filePath)
@@ -311,7 +312,7 @@ async function processOneFile(
             const tags = (block.tableRows.get('Tags') ?? '')
                 .split(/\s+/).filter(Boolean).map((t: string) => t.replace(/^#/, ''))
 
-            const newClip: any = { clip_type: clipType, hash, savedAt, path: filePath, tags }
+            const newClip: Clip = { clip_type: clipType, hash, savedAt, path: filePath, tags }
             if (clipType === 'highlight')
                 newClip.text = block.contentLines.join(' ').slice(0, 500)
 
@@ -374,7 +375,7 @@ export async function migrateOldFormatFile(app: App, filePath: string): Promise<
     const index = await loadIndex(app)
     const report: MigrationReport = { migrated: 0, skipped: 0, results: [] }
 
-    const clipsForFile: Array<{ url: string; clip: any }> = []
+    const clipsForFile: Array<{ url: string; clip: Clip }> = []
     for (const [url, entry] of Object.entries(index)) {
         for (const clip of (entry.clips ?? [])) {
             if (clip.path === filePath) clipsForFile.push({ url, clip })
@@ -394,7 +395,7 @@ export async function migrateOldFormatClips(app: App): Promise<MigrationReport> 
     const report: MigrationReport = { migrated: 0, skipped: 0, results: [] }
 
     // Build reverse map: filePath → index entries for fast lookup
-    type IndexEntry = { url: string; clip: any }
+    type IndexEntry = { url: string; clip: Clip }
     const fileToClips = new Map<string, IndexEntry[]>()
     for (const [url, entry] of Object.entries(index)) {
         for (const clip of (entry.clips ?? [])) {

@@ -41,7 +41,7 @@ function transformSection(app: App, sourcePath: string, confirmDelete: () => boo
         // qc_note and qc_details are meta callouts, never standalone cards
         const ct = callout.dataset.callout ?? ''
         if (ct === 'qc_note' || ct === 'qc_details') return
-        buildCardV2(app, sourcePath, confirmDelete, calloutSection, callout)
+        void buildCardV2(app, sourcePath, confirmDelete, calloutSection, callout)
         return
     }
 
@@ -59,7 +59,7 @@ function transformSection(app: App, sourcePath: string, confirmDelete: () => boo
     const prevSection = calloutSection.previousElementSibling as HTMLElement | null
     const noteSection = prevSection?.querySelector('[data-callout="note"]') ? prevSection : null
 
-    buildCard(app, sourcePath, confirmDelete, calloutSection, tableSection, callout, table as HTMLTableElement, noteSection)
+    void buildCard(app, sourcePath, confirmDelete, calloutSection, tableSection, callout, table as HTMLTableElement, noteSection)
 }
 
 // Called from main.ts on active-leaf-change to re-apply after Obsidian cache resets

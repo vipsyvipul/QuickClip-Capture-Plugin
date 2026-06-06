@@ -130,14 +130,14 @@ export default class QuickClipCapturePlugin extends Plugin {
         this.addSettingTab(new QuickClipSettingTab(this.app, this))
 
         if (this.settings.autoOpenOnStartup)
-            this.app.workspace.onLayoutReady(() => this.activateView())
+            this.app.workspace.onLayoutReady(() => { void this.activateView() })
 
-        this.addRibbonIcon(QC_ICON_ID, 'QuickClip Capture Manager', () => this.activateView())
+        this.addRibbonIcon(QC_ICON_ID, 'QuickClip Capture Manager', () => { void this.activateView() })
 
         this.addCommand({
             id: 'open-manager',
             name: 'Open clip manager',
-            callback: () => this.activateView(),
+            callback: () => { void this.activateView() },
         })
     }
 

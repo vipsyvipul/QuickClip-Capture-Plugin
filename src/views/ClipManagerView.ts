@@ -95,7 +95,7 @@ export class ClipManagerView extends ItemView {
                     return
                 }
                 if (this.snippetRefreshTimer) clearTimeout(this.snippetRefreshTimer)
-                this.snippetRefreshTimer = setTimeout(async () => {
+                this.snippetRefreshTimer = setTimeout(() => {
                     this.snippetRefreshTimer = null
                     const affected = this.clips.filter(ref => ref.clip.path === file.path)
                     if (affected.length === 0) return
@@ -105,7 +105,7 @@ export class ClipManagerView extends ItemView {
                         this.noteTextCache.delete(clipKey(ref))
                     }
                     for (const ref of affected) {
-                        this.loadFileData(ref).then(() => this.updateClipCells(ref))
+                        void this.loadFileData(ref).then(() => this.updateClipCells(ref)).catch(console.error)
                     }
                 }, 500)
             })
@@ -361,12 +361,11 @@ export class ClipManagerView extends ItemView {
         ], this.plugin.settings.filterNote)
 
         this.filterClearBtn = bar.createEl('button', { cls: 'qc-filter-clear', text: '✕ Clear' })
-        this.filterClearBtn.addEventListener('click', async () => {
+        this.filterClearBtn.addEventListener('click', () => {
             this.plugin.settings.filterFormat = ''
             this.plugin.settings.filterSource = ''
             this.plugin.settings.filterDate = ''
             this.plugin.settings.filterNote = ''
-            await this.plugin.saveSettings()
             this.filterFormatEl.value = ''
             this.filterSourceEl.value = ''
             this.filterDateEl.value = ''
@@ -375,6 +374,7 @@ export class ClipManagerView extends ItemView {
                 .forEach(el => el.removeClass('qc-filter-select--active'))
             this.updateFilterClear()
             this.applyFilters()
+            void this.plugin.saveSettings()
         })
 
         for (const [el, key] of [
@@ -383,12 +383,12 @@ export class ClipManagerView extends ItemView {
             [this.filterDateEl,   'filterDate'],
             [this.filterNoteEl,   'filterNote'],
         ] as [HTMLSelectElement, string][]) {
-            el.addEventListener('change', async () => {
+            el.addEventListener('change', () => {
                 (this.plugin.settings as unknown as Record<string, string>)[key] = el.value
-                await this.plugin.saveSettings()
                 el.toggleClass('qc-filter-select--active', !!el.value)
                 this.updateFilterClear()
                 this.applyFilters()
+                void this.plugin.saveSettings()
             })
         }
 
@@ -469,15 +469,15 @@ export class ClipManagerView extends ItemView {
             const cb = item.createEl('input', { type: 'checkbox' })
             cb.checked = this.plugin.settings.visibleColumns.includes(col.key)
             item.appendText(' ' + col.label)
-            cb.addEventListener('change', async () => {
+            cb.addEventListener('change', () => {
                 if (cb.checked) {
                     if (!this.plugin.settings.visibleColumns.includes(col.key))
                         this.plugin.settings.visibleColumns.push(col.key)
                 } else {
                     this.plugin.settings.visibleColumns = this.plugin.settings.visibleColumns.filter(k => k !== col.key)
                 }
-                await this.plugin.saveSettings()
                 this.renderTableOnly()
+                void this.plugin.saveSettings()
             })
         }
 
@@ -624,7 +624,7 @@ export class ClipManagerView extends ItemView {
             if (!table.contains(e.relatedTarget as Node)) clearHighlights()
         })
 
-        table.addEventListener('drop', async (e) => {
+        table.addEventListener('drop', (e) => {
             const cell = (e.target as HTMLElement).closest('th, td') as HTMLTableCellElement | null
             if (!cell) return
             const th = getThAt(cell.cellIndex)
@@ -643,8 +643,8 @@ export class ClipManagerView extends ItemView {
             if (toIdx === -1) return
             keys.splice(insertBefore ? toIdx : toIdx + 1, 0, fromKey)
             this.plugin.settings.columnOrder = keys
-            await this.plugin.saveSettings()
             this.renderTableOnly()
+            void this.plugin.saveSettings()
         })
     }
 
@@ -681,11 +681,11 @@ export class ClipManagerView extends ItemView {
                     this.resizeDragCleanup = null
                 }
 
-                const onUp = async () => {
+                const onUp = () => {
                     cleanup()
                     if (activeDocument.contains(th)) {
                         this.plugin.settings.columnWidths[key] = th.offsetWidth
-                        await this.plugin.saveSettings()
+                        void this.plugin.saveSettings()
                     }
                 }
 
@@ -743,10 +743,10 @@ export class ClipManagerView extends ItemView {
                         const opt = sel.createEl('option', { value: ct, text: ct })
                         if (ct === ref.content_type) opt.selected = true
                     }
-                    sel.addEventListener('change', async () => {
+                    sel.addEventListener('change', () => {
                         ref.content_type = sel.value as ContentType
                         sel.dataset.ct = sel.value
-                        await updateContentType(this.app, ref.url, ref.content_type)
+                        void updateContentType(this.app, ref.url, ref.content_type)
                     })
                     break
                 }
@@ -796,26 +796,27 @@ export class ClipManagerView extends ItemView {
             text: '✕',
             attr: { 'aria-label': 'Delete clip' },
         })
-        deleteBtn.addEventListener('click', async (e) => {
+        deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation()
             if (this.plugin.settings.confirmDelete) {
                 if (!window.confirm('Delete this clip? This cannot be undone.')) return
             }
             deleteBtn.disabled = true
             deleteBtn.setText('…')
-            try {
-                await deleteClip(this.app, ref.url, ref.clip.hash)
-                tr.remove()
-                this.clips = this.clips.filter(
-                    c => !(c.url === ref.url && c.clip.hash === ref.clip.hash)
-                )
-                this.updateCount()
-                new Notice('Clip deleted')
-            } catch {
-                new Notice('Failed to delete clip')
-                deleteBtn.disabled = false
-                deleteBtn.setText('✕')
-            }
+            void deleteClip(this.app, ref.url, ref.clip.hash)
+                .then(() => {
+                    tr.remove()
+                    this.clips = this.clips.filter(
+                        c => !(c.url === ref.url && c.clip.hash === ref.clip.hash)
+                    )
+                    this.updateCount()
+                    new Notice('Clip deleted')
+                })
+                .catch(() => {
+                    new Notice('Failed to delete clip')
+                    deleteBtn.disabled = false
+                    deleteBtn.setText('✕')
+                })
         })
     }
 
@@ -852,10 +853,10 @@ export class ClipManagerView extends ItemView {
         const curr = ref.clip.tags ?? []
         if (fileTags.length === curr.length && fileTags.every(t => curr.includes(t))) return
         ref.clip.tags = fileTags
-        loadIndex(this.app).then(idx => {
+        void loadIndex(this.app).then(idx => {
             const clip = idx[ref.url]?.clips.find(c => c.hash === ref.clip.hash)
-            if (clip) { clip.tags = fileTags; saveIndex(this.app, idx) }
-        })
+            if (clip) { clip.tags = fileTags; void saveIndex(this.app, idx) }
+        }).catch(console.error)
     }
 
     private renderEditableNote(td: HTMLElement, ref: ClipRef): void {
@@ -870,14 +871,14 @@ export class ClipManagerView extends ItemView {
         resize()
         ta.addEventListener('input', resize)
 
-        ta.addEventListener('blur', async () => {
+        ta.addEventListener('blur', () => {
             const newNote = ta.value.trim()
             const saved = ta.dataset.saved ?? ''
             if (newNote === saved) return
             ta.dataset.saved = newNote
             this.noteTextCache.set(clipKey(ref), newNote)
             this.noteCache.set(clipKey(ref), newNote.length > 0)
-            await updateClipNote(this.app, ref.url, ref.clip.hash, newNote)
+            void updateClipNote(this.app, ref.url, ref.clip.hash, newNote)
         })
         ta.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur() }
@@ -895,11 +896,10 @@ export class ClipManagerView extends ItemView {
                 const chip = td.createSpan({ cls: 'qc-tag-chip qc-tag-editable' })
                 chip.createSpan({ text: tag })
                 const btn = chip.createEl('button', { cls: 'qc-tag-remove', text: '×' })
-                btn.addEventListener('click', async (e) => {
+                btn.addEventListener('click', (e) => {
                     e.stopPropagation()
                     ref.clip.tags = (ref.clip.tags ?? []).filter(t => t !== tag)
-                    await updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags)
-                    rebuild()
+                    void updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags).then(() => rebuild())
                 })
             }
             const dl = td.createEl('datalist', { attr: { id: listId } })
@@ -908,23 +908,25 @@ export class ClipManagerView extends ItemView {
                 cls: 'qc-tag-input',
                 attr: { list: listId, placeholder: 'Add...', 'aria-label': 'Add tag' },
             })
-            input.addEventListener('keydown', async (e: KeyboardEvent) => {
+            input.addEventListener('keydown', (e: KeyboardEvent) => {
                 if (e.key !== 'Enter') return
                 e.preventDefault()
                 const val = input.value.trim()
                 if (!val || (ref.clip.tags ?? []).includes(val)) { input.value = ''; return }
                 ref.clip.tags = [...(ref.clip.tags ?? []), val]
-                await updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags)
-                input.value = ''
-                rebuild()
+                void updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags).then(() => {
+                    input.value = ''
+                    rebuild()
+                })
             })
-            input.addEventListener('change', async () => {
+            input.addEventListener('change', () => {
                 const val = input.value.trim()
                 if (!val || (ref.clip.tags ?? []).includes(val)) { input.value = ''; return }
                 ref.clip.tags = [...(ref.clip.tags ?? []), val]
-                await updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags)
-                input.value = ''
-                rebuild()
+                void updateClipTags(this.app, ref.url, ref.clip.hash, ref.clip.tags).then(() => {
+                    input.value = ''
+                    rebuild()
+                })
             })
         }
         rebuild()

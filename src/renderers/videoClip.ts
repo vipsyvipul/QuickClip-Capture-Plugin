@@ -46,19 +46,21 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
         const watchLabel = platform === 'vimeo' ? 'Watch on Vimeo ↗' : 'Watch on YouTube ↗'
         const onMessage = (e: MessageEvent) => {
             if (e.source !== iframe.contentWindow) return
-            let data: any
+            let data: unknown
             try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data } catch { return }
+            if (typeof data !== 'object' || !data) return
+            const d = data as { event?: string; info?: number; data?: { name?: string } }
 
             let errorInfo: { title: string; sub: string } | null = null
-            if (platform === 'youtube' && data?.event === 'onError') {
-                errorInfo = youtubeErrorText(data.info)
-            } else if (platform === 'vimeo' && data?.event === 'error') {
-                errorInfo = vimeoErrorText(data?.data?.name ?? '')
+            if (platform === 'youtube' && d.event === 'onError') {
+                errorInfo = youtubeErrorText(d.info ?? 0)
+            } else if (platform === 'vimeo' && d.event === 'error') {
+                errorInfo = vimeoErrorText(d.data?.name ?? '')
             }
             if (!errorInfo) return
 
             window.removeEventListener('message', onMessage)
-            wrap.innerHTML = ''
+            wrap.empty()
             wrap.addClass('qc-video-wrap--blocked')
             const inner = wrap.createDiv({ cls: 'qc-embed-blocked' })
             inner.createEl('span', { cls: 'qc-embed-blocked-title', text: errorInfo.title })

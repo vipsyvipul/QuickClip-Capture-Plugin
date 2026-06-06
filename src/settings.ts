@@ -123,7 +123,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
                 this.plugin.injectCalloutColors()
                 updateRowReset()
                 if (colorSaveTimer) clearTimeout(colorSaveTimer)
-                colorSaveTimer = setTimeout(() => { this.plugin.saveSettings() }, 300)
+                colorSaveTimer = setTimeout(() => { void this.plugin.saveSettings() }, 300)
             })
             rowReset.addEventListener('click', async () => {
                 this.plugin.settings.calloutColors[key] = DEFAULT_CALLOUT_COLORS[key]
@@ -182,7 +182,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
                 nameLink.addEventListener('click', e => {
                     e.preventDefault()
                     const file = this.app.vault.getAbstractFileByPath(filePath)
-                    if (file instanceof TFile) this.app.workspace.getLeaf(false).openFile(file)
+                    if (file instanceof TFile) void this.app.workspace.getLeaf(false).openFile(file)
                 })
                 info.createSpan({
                     text: `${blockCount} clip${blockCount !== 1 ? 's' : ''}`,
@@ -214,12 +214,12 @@ export class QuickClipSettingTab extends PluginSettingTab {
 
         const stored = this.plugin.settings.lastMigrationReport
         if (!(stored && stored.results.length === 0)) {
-            scanOldFormatFiles(this.app).then(files => {
+            void scanOldFormatFiles(this.app).then(files => {
                 if (files.length > 0) {
                     migrateSection.removeClass('is-hidden')
                     renderFileList(files)
                 }
-            })
+            }).catch(console.error)
         }
 
         migrateAllBtn.addEventListener('click', async () => {
@@ -313,7 +313,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
     private rerenderView(): void {
         const leaves = this.plugin.app.workspace.getLeavesOfType(VIEW_CLIP_MANAGER)
         for (const leaf of leaves) {
-            const view = leaf.view as any
+            const view = leaf.view as { rerenderTable?: () => void }
             if (typeof view.rerenderTable === 'function') view.rerenderTable()
         }
     }
