@@ -287,8 +287,6 @@ async function processOneFile(
 
         // ── Orphaned: not in index ─────────────────────────────────────
         if (!hash) {
-            hash = generateHash(filePath + block.captured)
-
             // Find URL from nearest heading above the block
             let url = ''
             for (let li = block.blockStart - 1; li >= 0; li--) {
@@ -296,37 +294,43 @@ async function processOneFile(
                 if (hm) { url = hm[1]; break }
             }
 
-            if (url) {
-                const qcType = TITLE_TO_QC[block.calloutTitle.toLowerCase()] ?? 'qc_highlight'
-                const clipType = qcType === 'qc_highlight' ? 'highlight'
-                    : qcType === 'qc_tweet' ? 'tweet'
-                    : qcType === 'qc_pdf_highlight' ? 'pdf-highlight'
-                    : 'image'
-                const savedAt = parseCapturedToIso(block.captured)
-                const tags = (block.tableRows.get('Tags') ?? '')
-                    .split(/\s+/).filter(Boolean).map((t: string) => t.replace(/^#/, ''))
-
-                const newClip: any = { clip_type: clipType, hash, savedAt, path: filePath, tags }
-                if (clipType === 'highlight')
-                    newClip.text = block.contentLines.join(' ').slice(0, 500)
-
-                if (!index[url]) {
-                    const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
-                    index[url] = {
-                        title: '', content_type: 'article', type: 'Note',
-                        organized: false, archived: false, belongs_to: '', related_to: [],
-                        domain, first_clipped: savedAt, last_clipped: savedAt, clips: [],
-                    }
-                }
-                index[url].clips.push(newClip)
-                indexModified = true
-
+            if (!url) {
                 report.results.push({ filePath, preview, status: 'warning',
-                    reason: 'Clip was not in clipsHistory.json — reconstructed and added' })
-            } else {
-                report.results.push({ filePath, preview, status: 'warning',
-                    reason: 'Clip was not in clipsHistory.json and no URL heading found — migrated without index entry' })
+                    reason: 'Clip is not in clipsHistory.json and no URL heading found — skipped' })
+                continue
             }
+
+            hash = generateHash(filePath + block.captured)
+
+            const qcType = TITLE_TO_QC[block.calloutTitle.toLowerCase()] ?? 'qc_highlight'
+            const clipType = qcType === 'qc_highlight' ? 'highlight'
+                : qcType === 'qc_tweet' ? 'tweet'
+                : qcType === 'qc_pdf_highlight' ? 'pdf-highlight'
+                : 'image'
+            const savedAt = parseCapturedToIso(block.captured)
+            const tags = (block.tableRows.get('Tags') ?? '')
+                .split(/\s+/).filter(Boolean).map((t: string) => t.replace(/^#/, ''))
+
+            const newClip: any = { clip_type: clipType, hash, savedAt, path: filePath, tags }
+            if (clipType === 'highlight')
+                newClip.text = block.contentLines.join(' ').slice(0, 500)
+
+            if (!index[url]) {
+                const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
+                const content_type = clipType === 'tweet' ? 'tweet'
+                    : clipType === 'pdf-highlight' ? 'pdf'
+                    : 'article'
+                index[url] = {
+                    title: '', content_type, type: 'Note',
+                    organized: false, archived: false, belongs_to: '', related_to: [],
+                    domain, first_clipped: savedAt, last_clipped: savedAt, clips: [],
+                }
+            }
+            index[url].clips.push(newClip)
+            indexModified = true
+
+            report.results.push({ filePath, preview, status: 'warning',
+                reason: 'Clip was not in clipsHistory.json — reconstructed and added' })
         }
 
         // ── Replace block in lines array ───────────────────────────────
@@ -352,28 +356,14 @@ async function processOneFile(
 // ─── Scan for files with old-format clips ────────────────────────────────────
 
 export async function scanOldFormatFiles(app: App): Promise<{ filePath: string; blockCount: number }[]> {
-    const index = await loadIndex(app)
     const results: { filePath: string; blockCount: number }[] = []
-    const seen = new Set<string>()
 
-    const checkFile = async (file: TFile) => {
-        if (seen.has(file.path)) return
-        seen.add(file.path)
+    for (const file of app.vault.getMarkdownFiles()) {
         const content = await app.vault.read(file)
-        if (!/^> \[!(quote|clip)\]/im.test(content)) return
+        if (!/^> \[!(quote|clip)\]/im.test(content)) continue
         const blocks = findOldBlocks(content.split('\n'))
         if (blocks.length > 0) results.push({ filePath: file.path, blockCount: blocks.length })
     }
-
-    for (const entry of Object.values(index)) {
-        for (const clip of ((entry as any).clips ?? [])) {
-            if (!clip.path) continue
-            const file = app.vault.getAbstractFileByPath(clip.path)
-            if (file instanceof TFile) await checkFile(file)
-        }
-    }
-
-    for (const file of app.vault.getMarkdownFiles()) await checkFile(file)
 
     return results.sort((a, b) => b.blockCount - a.blockCount)
 }

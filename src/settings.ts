@@ -216,12 +216,15 @@ export class QuickClipSettingTab extends PluginSettingTab {
             }
         }
 
-        scanOldFormatFiles(this.app).then(files => {
-            if (files.length > 0) {
-                migrateSection.style.display = ''
-                renderFileList(files)
-            }
-        })
+        const stored = this.plugin.settings.lastMigrationReport
+        if (!(stored && stored.results.length === 0)) {
+            scanOldFormatFiles(this.app).then(files => {
+                if (files.length > 0) {
+                    migrateSection.style.display = ''
+                    renderFileList(files)
+                }
+            })
+        }
 
         migrateAllBtn.addEventListener('click', async () => {
             setAllDisabled(true)
