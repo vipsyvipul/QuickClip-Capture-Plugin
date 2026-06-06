@@ -436,7 +436,7 @@ export class ClipManagerView extends ItemView {
     }
 
     private applyFilters(): void {
-        const wrap = this.contentEl.querySelector('.qc-manager-table-wrap') as HTMLElement | null
+        const wrap = this.contentEl.querySelector<HTMLElement>('.qc-manager-table-wrap')
         if (!wrap) return
         wrap.empty()
         const filtered = this.getFiltered()
@@ -513,7 +513,7 @@ export class ClipManagerView extends ItemView {
     public rerenderTable(): void { this.renderTableOnly() }
 
     private renderTableOnly(): void {
-        const wrap = this.contentEl.querySelector('.qc-manager-table-wrap') as HTMLElement | null
+        const wrap = this.contentEl.querySelector<HTMLElement>('.qc-manager-table-wrap')
         if (!wrap) return
         wrap.empty()
         const filtered = this.getFiltered()
@@ -611,7 +611,7 @@ export class ClipManagerView extends ItemView {
             table.querySelector(`thead tr th:nth-child(${colIdx + 1})`)
 
         table.addEventListener('dragover', (e) => {
-            const cell = (e.target as HTMLElement).closest('th, td') as HTMLTableCellElement | null
+            const cell = (e.target as HTMLElement).closest<HTMLTableCellElement>('th, td')
             if (!cell) return
             const th = getThAt(cell.cellIndex)
             if (!th?.dataset.colKey) return
@@ -625,7 +625,7 @@ export class ClipManagerView extends ItemView {
         })
 
         table.addEventListener('drop', (e) => {
-            const cell = (e.target as HTMLElement).closest('th, td') as HTMLTableCellElement | null
+            const cell = (e.target as HTMLElement).closest<HTMLTableCellElement>('th, td')
             if (!cell) return
             const th = getThAt(cell.cellIndex)
             if (!th?.dataset.colKey) return
@@ -650,7 +650,7 @@ export class ClipManagerView extends ItemView {
 
     private attachResizeHandles(table: HTMLElement): void {
         const widths = this.plugin.settings.columnWidths ?? {}
-        const ths = Array.from(table.querySelectorAll('thead tr th')) as HTMLTableCellElement[]
+        const ths = Array.from(table.querySelectorAll<HTMLTableCellElement>('thead tr th'))
 
         for (const th of ths) {
             if (th.classList.contains('qc-th-delete')) continue
@@ -825,14 +825,14 @@ export class ClipManagerView extends ItemView {
         if (!tr) return
         const raw = this.rawSnippet(ref)
         const len = this.plugin.settings.snippetLength
-        const snippetLink = tr.querySelector('.qc-snippet-link') as HTMLElement | null
+        const snippetLink = tr.querySelector<HTMLElement>('.qc-snippet-link')
         if (snippetLink) {
             snippetLink.textContent = raw.length > len ? raw.slice(0, len) + '…' : raw
             snippetLink.title = ref.clip.text ?? raw
         }
-        const noteCell = tr.querySelector('.qc-cell--has-notes') as HTMLElement | null
+        const noteCell = tr.querySelector<HTMLElement>('.qc-cell--has-notes')
         if (noteCell) noteCell.textContent = this.noteCache.get(clipKey(ref)) ? 'Yes' : 'No'
-        const noteInput = tr.querySelector('.qc-note-input') as HTMLTextAreaElement | null
+        const noteInput = tr.querySelector<HTMLTextAreaElement>('.qc-note-input')
         if (noteInput && activeDocument.activeElement !== noteInput) {
             const noteText = this.noteTextCache.get(clipKey(ref)) ?? ''
             noteInput.value = noteText
@@ -864,7 +864,7 @@ export class ClipManagerView extends ItemView {
         const ta = td.createEl('textarea', {
             cls: 'qc-note-input',
             attr: { rows: '1', placeholder: 'Add note...', 'aria-label': 'Note', 'data-saved': noteText },
-        }) as HTMLTextAreaElement
+        })
         ta.value = noteText
 
         const resize = () => { ta.setCssProps({'--qc-ta-h': 'auto'}); ta.setCssProps({'--qc-ta-h': ta.scrollHeight + 'px'}) }

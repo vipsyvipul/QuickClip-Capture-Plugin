@@ -17,7 +17,7 @@ class HighlightScanner extends MarkdownRenderChild {
     onload(): void {
         const tryTransform = () => {
             if (!this.containerEl.parentElement) {
-                requestAnimationFrame(tryTransform)
+                activeWindow.requestAnimationFrame(tryTransform)
                 return
             }
             // Only render in Reading view — Live Preview mounts callouts outside
@@ -59,14 +59,14 @@ function transformSection(app: App, sourcePath: string, confirmDelete: () => boo
     const prevSection = calloutSection.previousElementSibling as HTMLElement | null
     const noteSection = prevSection?.querySelector('[data-callout="note"]') ? prevSection : null
 
-    void buildCard(app, sourcePath, confirmDelete, calloutSection, tableSection, callout, table as HTMLTableElement, noteSection)
+    void buildCard(app, sourcePath, confirmDelete, calloutSection, tableSection, callout, table, noteSection)
 }
 
 // Called from main.ts on active-leaf-change to re-apply after Obsidian cache resets
 export function scanAndTransform(app: App, container: HTMLElement, sourcePath: string, confirmDelete: () => boolean): void {
     const sections = Array.from(container.querySelectorAll('[data-callout="quote"], [data-callout="clip"], [data-callout^="qc_"]'))
     sections.forEach(callout => {
-        const section = callout.closest('.el-div, .el-blockquote, div') as HTMLElement | null
+        const section = callout.closest<HTMLElement>('.el-div, .el-blockquote, div')
         if (section && section.parentElement === container) {
             transformSection(app, sourcePath, confirmDelete, section)
         }
@@ -400,7 +400,7 @@ async function buildCard(
 
     // Save scroll position before any DOM mutations so the browser's scroll
     // anchor algorithm can't snap the view when content height changes.
-    const scrollEl = calloutSection.closest('.markdown-preview-view') as HTMLElement | null
+    const scrollEl = calloutSection.closest<HTMLElement>('.markdown-preview-view')
     const savedScrollTop = scrollEl?.scrollTop
 
     calloutSection.empty()
@@ -644,7 +644,7 @@ async function buildCardV2(
     cardBody.appendChild(footer)
     card.appendChild(cardBody)
 
-    const scrollEl = calloutSection.closest('.markdown-preview-view') as HTMLElement | null
+    const scrollEl = calloutSection.closest<HTMLElement>('.markdown-preview-view')
     const savedScrollTop = scrollEl?.scrollTop
 
     calloutSection.empty()

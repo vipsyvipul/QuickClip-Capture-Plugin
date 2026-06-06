@@ -23,7 +23,7 @@ export function injectVideoClipView(app: App, containerEl: HTMLElement, filePath
 
     const table = Array.from(section.querySelectorAll('table')).find(
         t => t.querySelector('th')?.textContent?.trim().toLowerCase() === 'time'
-    ) as HTMLTableElement | undefined
+    )
     if (!table) return
 
     const wrap = createDiv({ cls: 'qc-video-wrap' })

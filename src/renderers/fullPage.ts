@@ -35,7 +35,7 @@ class FullPageNoteScanner extends MarkdownRenderChild {
 
     onload(): void {
         const tryRender = () => {
-            if (!this.containerEl.parentElement) { requestAnimationFrame(tryRender); return }
+            if (!this.containerEl.parentElement) { activeWindow.requestAnimationFrame(tryRender); return }
             if (!this.containerEl.closest('.markdown-reading-view')) return
             this.render()
         }
@@ -79,11 +79,11 @@ export function injectFullPageHeader(app: App, container: HTMLElement, sourcePat
     const meta = app.metadataCache.getFileCache(file)
     if (meta?.frontmatter?.['clip_type'] !== 'full-page') return
 
-    const previewView = container.querySelector('.markdown-preview-view') as HTMLElement | null
+    const previewView = container.querySelector<HTMLElement>('.markdown-preview-view')
     if (!previewView) return
 
     const anchor = previewView.querySelector('.metadata-container') ?? previewView.querySelector('.frontmatter')
-    if (anchor) (anchor as HTMLElement).addClass('is-hidden')
+    if (anchor) anchor.addClass('is-hidden')
     let insertAfter: Element | null = anchor
 
     // ── Header pills ──────────────────────────────────────────────
@@ -155,6 +155,6 @@ export function injectFullPageHeader(app: App, container: HTMLElement, sourcePat
         abortCtrl.abort()
         observer.disconnect()
         sentinel.remove()
-        if (anchor) (anchor as HTMLElement).removeClass('is-hidden')
+        if (anchor) anchor.removeClass('is-hidden')
     }
 }
