@@ -18,11 +18,11 @@ The **QuickClip Capture** Chrome extension must be installed and configured to s
 
 Every clip type is rendered as a polished card in Reading view:
 
-- **Highlights** — quoted text with source link, tags, captured date, and one-click delete
-- **Full-page clips** — complete Markdown article with author, publish date, site, and word count
-- **YouTube / Vimeo clips** — embedded video player with clickable timestamp chips that seek the video; sortable clip table
+- **Highlights** — collapsible cards with quoted text, source link, tags, captured date, and one-click delete; collapsed by default with a summary header; expand state persisted across sessions
+- **Full-page clips** — complete Markdown article with author, publish date, site pill, word count, and a reading progress bar that appears as you scroll
+- **YouTube / Vimeo clips** — embedded video player with clickable timestamp chips that seek the video; sortable clip table with per-row delete
 - **Tweets** — native Twitter/X embed with badge, date, and delete
-- **PDF highlights** — quoted text with source file link and page number
+- **PDF highlights** — quoted text with source file link and page number; local PDFs open in your default app
 - **Images** — inline image with caption and metadata
 
 ### Clip Manager
@@ -41,6 +41,8 @@ A dedicated panel (accessible from the ribbon or command palette) to browse ever
 - **Row density** — compact, comfortable, or spacious
 - **Snippet length**, **date format**, **file path display**, and more
 - **Confirm before delete** toggle
+- **Auto-open on startup** — open the Clip Manager automatically when Obsidian loads
+- **Migration tool** — one-click migration of clips saved in the old format to the current callout structure (shown only when old-format clips are detected)
 
 ---
 
