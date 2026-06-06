@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, TFile, Notice, setIcon } from 'obsidian'
 import QuickClipCapturePlugin from '../main'
 import { loadIndex, saveIndex, getAllClips, deleteClip, updateContentType, updateClipTags, updateClipNote, invalidateIndexCache } from '../clipsIndex'
 import { ClipRef, Clip, ContentType } from '../types'
+import { ConfirmModal } from '../confirmModal'
 
 export const VIEW_CLIP_MANAGER = 'quickclip-manager'
 
@@ -22,7 +23,7 @@ function formatTimestamp(seconds: number): string {
 
 function stripMarkdown(text: string): string {
     return text
-        .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt) => alt || '')  // images → alt text
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_: string, alt: string) => alt || '')  // images → alt text
         .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')                     // links → label
         .replace(/\*\*(.+?)\*\*|__(.+?)__/g, '$1$2')                // bold
         .replace(/\*(.+?)\*|_(.+?)_/g, '$1$2')                      // italic
@@ -73,7 +74,7 @@ export class ClipManagerView extends ItemView {
     private snippetCache = new Map<string, string>()
     private noteCache = new Map<string, boolean>()
     private noteTextCache = new Map<string, string>()
-    private snippetRefreshTimer: ReturnType<typeof setTimeout> | null = null
+    private snippetRefreshTimer: number | null = null
     private resizeDragCleanup: (() => void) | null = null
 
     constructor(leaf: WorkspaceLeaf, plugin: QuickClipCapturePlugin) {
@@ -87,15 +88,15 @@ export class ClipManagerView extends ItemView {
 
     async onOpen(): Promise<void> {
         this.registerEvent(
-            this.app.vault.on('modify', async (file) => {
+            this.app.vault.on('modify', (file) => {
                 if (!(file instanceof TFile)) return
                 if (file.path === '.quickclip/clipsHistory.json') {
                     invalidateIndexCache()
-                    await this.refresh()
+                    void this.refresh()
                     return
                 }
-                if (this.snippetRefreshTimer) clearTimeout(this.snippetRefreshTimer)
-                this.snippetRefreshTimer = setTimeout(() => {
+                if (this.snippetRefreshTimer) window.clearTimeout(this.snippetRefreshTimer)
+                this.snippetRefreshTimer = window.setTimeout(() => {
                     this.snippetRefreshTimer = null
                     const affected = this.clips.filter(ref => ref.clip.path === file.path)
                     if (affected.length === 0) return
@@ -121,7 +122,7 @@ export class ClipManagerView extends ItemView {
             this.colPickerClose = null
         }
         if (this.snippetRefreshTimer) {
-            clearTimeout(this.snippetRefreshTimer)
+            window.clearTimeout(this.snippetRefreshTimer)
             this.snippetRefreshTimer = null
         }
     }
@@ -297,7 +298,7 @@ export class ClipManagerView extends ItemView {
         right.createDiv('qc-manager-count')
         const refreshBtn = right.createEl('button', { cls: 'qc-refresh-btn', attr: { title: 'Refresh', 'aria-label': 'Refresh' } })
         setIcon(refreshBtn, 'refresh-cw')
-        refreshBtn.addEventListener('click', () => this.refresh())
+        refreshBtn.addEventListener('click', () => { void this.refresh() })
         this.renderColumnPicker(right)
 
         if (this.clips.length === 0) {
@@ -798,25 +799,29 @@ export class ClipManagerView extends ItemView {
         })
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation()
-            if (this.plugin.settings.confirmDelete) {
-                if (!window.confirm('Delete this clip? This cannot be undone.')) return
+            const doDelete = () => {
+                deleteBtn.disabled = true
+                deleteBtn.setText('…')
+                void deleteClip(this.app, ref.url, ref.clip.hash)
+                    .then(() => {
+                        tr.remove()
+                        this.clips = this.clips.filter(
+                            c => !(c.url === ref.url && c.clip.hash === ref.clip.hash)
+                        )
+                        this.updateCount()
+                        new Notice('Clip deleted')
+                    })
+                    .catch(() => {
+                        new Notice('Failed to delete clip')
+                        deleteBtn.disabled = false
+                        deleteBtn.setText('✕')
+                    })
             }
-            deleteBtn.disabled = true
-            deleteBtn.setText('…')
-            void deleteClip(this.app, ref.url, ref.clip.hash)
-                .then(() => {
-                    tr.remove()
-                    this.clips = this.clips.filter(
-                        c => !(c.url === ref.url && c.clip.hash === ref.clip.hash)
-                    )
-                    this.updateCount()
-                    new Notice('Clip deleted')
-                })
-                .catch(() => {
-                    new Notice('Failed to delete clip')
-                    deleteBtn.disabled = false
-                    deleteBtn.setText('✕')
-                })
+            if (this.plugin.settings.confirmDelete) {
+                new ConfirmModal(this.app, 'Delete this clip? This cannot be undone.', doDelete).open()
+            } else {
+                doDelete()
+            }
         })
     }
 

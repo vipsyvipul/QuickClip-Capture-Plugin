@@ -101,7 +101,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
 
         const colorInputs: Record<string, HTMLInputElement> = {}
         const colorResetUpdaters: Array<() => void> = []
-        let colorSaveTimer: ReturnType<typeof setTimeout> | null = null
+        let colorSaveTimer: number | null = null
 
         for (const { key, label } of CALLOUT_COLOR_ROWS) {
             const s = new Setting(details).setName(label)
@@ -122,29 +122,29 @@ export class QuickClipSettingTab extends PluginSettingTab {
                 this.plugin.settings.calloutColors[key] = input.value
                 this.plugin.injectCalloutColors()
                 updateRowReset()
-                if (colorSaveTimer) clearTimeout(colorSaveTimer)
-                colorSaveTimer = setTimeout(() => { void this.plugin.saveSettings() }, 300)
+                if (colorSaveTimer) window.clearTimeout(colorSaveTimer)
+                colorSaveTimer = window.setTimeout(() => { void this.plugin.saveSettings() }, 300)
             })
-            rowReset.addEventListener('click', async () => {
+            rowReset.addEventListener('click', () => {
                 this.plugin.settings.calloutColors[key] = DEFAULT_CALLOUT_COLORS[key]
                 input.value = DEFAULT_CALLOUT_COLORS[key]
-                await this.plugin.saveSettings()
                 this.plugin.injectCalloutColors()
                 updateRowReset()
+                void this.plugin.saveSettings()
             })
         }
 
         new Setting(details)
             .addButton(b => b
                 .setButtonText('Reset all to defaults')
-                .onClick(async () => {
+                .onClick(() => {
                     this.plugin.settings.calloutColors = { ...DEFAULT_CALLOUT_COLORS }
-                    await this.plugin.saveSettings()
                     this.plugin.injectCalloutColors()
                     CALLOUT_COLOR_ROWS.forEach(({ key }) => {
                         if (colorInputs[key]) colorInputs[key].value = DEFAULT_CALLOUT_COLORS[key]
                     })
                     colorResetUpdaters.forEach(fn => fn())
+                    void this.plugin.saveSettings()
                 }))
 
         // ── Migration (hidden until old clips detected) ──────────────────────
@@ -189,7 +189,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
                     cls: 'qc-migrate-file-count',
                 })
                 const btn = row.createEl('button', { text: 'Migrate', cls: 'qc-migrate-file-btn' })
-                btn.addEventListener('click', async () => {
+                btn.addEventListener('click', () => void (async () => {
                     setAllDisabled(true)
                     btn.setText('Migrating…')
                     statusEl.empty()
@@ -208,7 +208,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
                     renderFileList(remaining)
                     setAllDisabled(false)
                     if (remaining.length === 0) migrateSection.addClass('is-hidden')
-                })
+                })())
             }
         }
 
@@ -222,7 +222,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
             }).catch(console.error)
         }
 
-        migrateAllBtn.addEventListener('click', async () => {
+        migrateAllBtn.addEventListener('click', () => void (async () => {
             setAllDisabled(true)
             migrateAllBtn.setText('Migrating…')
             statusEl.empty()
@@ -259,7 +259,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
             setAllDisabled(false)
             if (remaining.length === 0) migrateSection.addClass('is-hidden')
             else migrateAllBtn.setText('Migrate all files')
-        })
+        })())
     }
 
     private nothingToMigrate(report: { migrated: number; results: Array<{ status: string }> }): boolean {
@@ -313,7 +313,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
     private rerenderView(): void {
         const leaves = this.plugin.app.workspace.getLeavesOfType(VIEW_CLIP_MANAGER)
         for (const leaf of leaves) {
-            const view = leaf.view as { rerenderTable?: () => void }
+            const view = leaf.view as unknown as { rerenderTable?: () => void }
             if (typeof view.rerenderTable === 'function') view.rerenderTable()
         }
     }

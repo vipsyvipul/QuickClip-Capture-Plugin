@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian'
 import { loadIndex, deleteClip } from '../clipsIndex'
+import { ConfirmModal } from '../confirmModal'
 
 type KnownPlatform = 'youtube' | 'vimeo'
 interface ParsedVideo { platform: KnownPlatform; videoId: string }
@@ -204,26 +205,31 @@ function transformTable(
             text: '×',
             attr: { title: 'Delete clip' },
         })
-        deleteBtn.addEventListener('click', async (e) => {
+        deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation()
-            if (confirmDelete() && !window.confirm('Delete this clip?')) return
-            const index = await loadIndex(app)
-            let matchUrl = ''
-            let matchHash = ''
-            outer: for (const [url, entry] of Object.entries(index)) {
-                for (const clip of entry.clips) {
-                    if (clip.path === filePath && fmtTimeline(clip.savedAt) === rawTimeline) {
-                        matchUrl = url
-                        matchHash = clip.hash
-                        break outer
+            const doDelete = () => { void (async () => {
+                const index = await loadIndex(app)
+                let matchUrl = ''
+                let matchHash = ''
+                outer: for (const [url, entry] of Object.entries(index)) {
+                    for (const clip of entry.clips) {
+                        if (clip.path === filePath && fmtTimeline(clip.savedAt) === rawTimeline) {
+                            matchUrl = url
+                            matchHash = clip.hash
+                            break outer
+                        }
                     }
                 }
+                if (!matchHash) return
+                await deleteClip(app, matchUrl, matchHash)
+                row.remove()
+                window.setTimeout(() => injectVideoClipView(app, containerEl, filePath, confirmDelete), 300)
+            })() }
+            if (confirmDelete()) {
+                new ConfirmModal(app, 'Delete this clip?', doDelete).open()
+            } else {
+                doDelete()
             }
-            if (!matchHash) return
-            await deleteClip(app, matchUrl, matchHash)
-            row.remove()
-            // Obsidian re-renders the file after vault.modify — re-inject the video once it settles
-            setTimeout(() => injectVideoClipView(app, containerEl, filePath, confirmDelete), 300)
         })
     }
 }

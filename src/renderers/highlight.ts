@@ -1,5 +1,6 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownRenderer, setIcon } from 'obsidian'
 import { loadIndex, deleteClip, invalidateIndexCache } from '../clipsIndex'
+import { ConfirmModal } from '../confirmModal'
 
 const X_ICON_ID = 'qc-x-brand'
 
@@ -326,24 +327,29 @@ async function buildCard(
         deleteBtn.className = 'qc-delete-btn qc-card-delete-btn'
         deleteBtn.textContent = '×'
         deleteBtn.title = 'Delete clip'
-        deleteBtn.addEventListener('click', async (e) => {
+        deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation()
-            if (confirmDelete() && !window.confirm('Delete this clip?')) return
-            const index = await loadIndex(app)
-            // Find clip by file path + captured date — more reliable than URL matching
-            let matchUrl = ''
-            let match = null
-            for (const [url, entry] of Object.entries(index)) {
-                const clip = entry.clips.find(c => fmtDate(c.savedAt) === captured && c.path === sourcePath)
-                if (clip) { matchUrl = url; match = clip; break }
+            const doDelete = () => { void (async () => {
+                const index = await loadIndex(app)
+                let matchUrl = ''
+                let match = null
+                for (const [url, entry] of Object.entries(index)) {
+                    const clip = entry.clips.find(c => fmtDate(c.savedAt) === captured && c.path === sourcePath)
+                    if (clip) { matchUrl = url; match = clip; break }
+                }
+                if (!match) return
+                await deleteClip(app, matchUrl, match.hash)
+                const sep = tableSection.nextElementSibling
+                noteSection?.remove()
+                calloutSection.remove()
+                tableSection.remove()
+                if (sep?.tagName === 'HR') sep.remove()
+            })() }
+            if (confirmDelete()) {
+                new ConfirmModal(app, 'Delete this clip?', doDelete).open()
+            } else {
+                doDelete()
             }
-            if (!match) return
-            await deleteClip(app, matchUrl, match.hash)
-            const sep = tableSection.nextElementSibling
-            noteSection?.remove()
-            calloutSection.remove()
-            tableSection.remove()
-            if (sep?.tagName === 'HR') sep.remove()
         })
         rightGroup.appendChild(deleteBtn)
     }
@@ -589,20 +595,26 @@ async function buildCardV2(
         const deleteBtn = activeDocument.createElement('button')
         deleteBtn.className = 'qc-delete-btn qc-card-delete-btn'
         deleteBtn.textContent = '×'; deleteBtn.title = 'Delete clip'
-        deleteBtn.addEventListener('click', async (e) => {
+        deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation()
-            if (confirmDelete() && !window.confirm('Delete this clip?')) return
-            const index = await loadIndex(app)
-            let matchUrl = ''; let matchClip = null
-            for (const [url, entry] of Object.entries(index)) {
-                const c = entry.clips.find(c => c.hash === hash)
-                if (c) { matchUrl = url; matchClip = c; break }
+            const doDelete = () => { void (async () => {
+                const index = await loadIndex(app)
+                let matchUrl = ''; let matchClip = null
+                for (const [url, entry] of Object.entries(index)) {
+                    const c = entry.clips.find(c => c.hash === hash)
+                    if (c) { matchUrl = url; matchClip = c; break }
+                }
+                if (!matchClip) return
+                await deleteClip(app, matchUrl, matchClip.hash)
+                const sep = calloutSection.nextElementSibling
+                calloutSection.remove()
+                if (sep?.tagName === 'HR') sep.remove()
+            })() }
+            if (confirmDelete()) {
+                new ConfirmModal(app, 'Delete this clip?', doDelete).open()
+            } else {
+                doDelete()
             }
-            if (!matchClip) return
-            await deleteClip(app, matchUrl, matchClip.hash)
-            const sep = calloutSection.nextElementSibling
-            calloutSection.remove()
-            if (sep?.tagName === 'HR') sep.remove()
         })
         rightGroup.appendChild(deleteBtn)
     }
