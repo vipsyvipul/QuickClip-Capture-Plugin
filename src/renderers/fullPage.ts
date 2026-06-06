@@ -46,14 +46,14 @@ class FullPageNoteScanner extends MarkdownRenderChild {
         const content = this.noteCallout.querySelector<HTMLElement>('.callout-content')
         if (!content) return
 
-        const bar = document.createElement('div')
+        const bar = activeDocument.createElement('div')
         bar.className = 'qc-fullpage-note'
 
-        const iconEl = document.createElement('span')
+        const iconEl = activeDocument.createElement('span')
         iconEl.className = 'qc-fullpage-note-icon'
         setIcon(iconEl, 'message-circle')
 
-        const textEl = document.createElement('div')
+        const textEl = activeDocument.createElement('div')
         textEl.className = 'qc-fullpage-note-text'
         Array.from(content.childNodes).forEach(n => textEl.appendChild(n.cloneNode(true)))
 
@@ -89,11 +89,11 @@ export function injectFullPageHeader(app: App, container: HTMLElement, sourcePat
     // ── Header pills ──────────────────────────────────────────────
     const { author, published, site, word_count } = meta.frontmatter ?? {}
     if (author || published || site || word_count) {
-        const header = document.createElement('div')
+        const header = activeDocument.createElement('div')
         header.className = 'qc-fullpage-header'
 
         const addPill = (text: string) => {
-            const pill = document.createElement('span')
+            const pill = activeDocument.createElement('span')
             pill.className = 'qc-fullpage-pill'
             pill.textContent = text
             header.appendChild(pill)
@@ -120,7 +120,7 @@ export function injectFullPageHeader(app: App, container: HTMLElement, sourcePat
     // Sits in the content flow after the header pills. Obsidian's lazy renderer
     // may remove it when scrolled far enough — that's fine; IntersectionObserver
     // treats removal as "not intersecting" and shows the progress bar correctly.
-    const sentinel = document.createElement('div')
+    const sentinel = activeDocument.createElement('div')
     sentinel.className = 'qc-progress-sentinel'
     if (insertAfter) {
         insertAfter.after(sentinel)
@@ -132,9 +132,9 @@ export function injectFullPageHeader(app: App, container: HTMLElement, sourcePat
     // ── Progress bar ──────────────────────────────────────────────
     // Lives directly in .markdown-preview-view — outside Obsidian's lazily-rendered
     // sections, so it's never removed. Hidden until sentinel scrolls out of view.
-    const progressBar = document.createElement('div') as ProgressBar
+    const progressBar = activeDocument.createElement('div') as ProgressBar
     progressBar.className = 'qc-reading-progress qc-reading-progress--hidden'
-    const progressFill = document.createElement('div')
+    const progressFill = activeDocument.createElement('div')
     progressFill.className = 'qc-reading-progress-fill'
     progressBar.appendChild(progressFill)
     previewView.prepend(progressBar)

@@ -104,15 +104,15 @@ function persistExpanded(key: string, expanded: boolean): void {
 }
 
 function buildCardHeader(card: HTMLElement, badgeCfg: BadgeCfg, summaryText: string, persistKey: string): void {
-    const cardHeader = document.createElement('div')
+    const cardHeader = activeDocument.createElement('div')
     cardHeader.className = 'qc-card-header'
-    const chevronEl = document.createElement('span')
+    const chevronEl = activeDocument.createElement('span')
     chevronEl.className = 'qc-card-chevron'
     setIcon(chevronEl, 'chevron-down')
-    const iconEl = document.createElement('span')
+    const iconEl = activeDocument.createElement('span')
     iconEl.className = 'qc-card-header-icon'
     setIcon(iconEl, badgeCfg.icon)
-    const headerSummary = document.createElement('span')
+    const headerSummary = activeDocument.createElement('span')
     headerSummary.className = 'qc-card-header-summary'
     headerSummary.textContent = summaryText ? `${badgeCfg.label} — ${summaryText}` : badgeCfg.label
     cardHeader.appendChild(chevronEl)
@@ -209,14 +209,14 @@ async function buildCard(
     const badgeCfg = BADGE[clipType] ?? BADGE['highlight']
 
     // Quote block
-    const quoteBlock = document.createElement('div')
+    const quoteBlock = activeDocument.createElement('div')
     quoteBlock.className = 'qc-quote-block'
 
-    const quoteIcon = document.createElement('span')
+    const quoteIcon = activeDocument.createElement('span')
     quoteIcon.className = 'qc-quote-icon'
     quoteIcon.textContent = '❝'
 
-    const quoteEl = document.createElement('div')
+    const quoteEl = activeDocument.createElement('div')
     quoteEl.className = 'qc-highlight-quote'
     Array.from(contentEl.childNodes).forEach(n => quoteEl.appendChild(n.cloneNode(true)))
 
@@ -227,16 +227,16 @@ async function buildCard(
     quoteBlock.appendChild(quoteEl)
 
     // Footer
-    const footer = document.createElement('div')
+    const footer = activeDocument.createElement('div')
     footer.className = 'qc-highlight-footer'
 
     if (tags.length) {
-        const sep1 = document.createElement('hr')
+        const sep1 = activeDocument.createElement('hr')
         sep1.className = 'qc-sep'
-        const tagsEl = document.createElement('div')
+        const tagsEl = activeDocument.createElement('div')
         tagsEl.className = 'qc-highlight-tags'
         tags.forEach(tag => {
-            const chip = document.createElement('a')
+            const chip = activeDocument.createElement('a')
             chip.className = 'tag'
             chip.textContent = tag
             chip.href = tag
@@ -246,28 +246,28 @@ async function buildCard(
         footer.appendChild(tagsEl)
     }
 
-    const sep2 = document.createElement('hr')
+    const sep2 = activeDocument.createElement('hr')
     sep2.className = 'qc-sep'
 
-    const actionsEl = document.createElement('div')
+    const actionsEl = activeDocument.createElement('div')
     actionsEl.className = 'qc-highlight-actions'
 
     // Left group: badge + source link + optional page number
-    const leftGroup = document.createElement('div')
+    const leftGroup = activeDocument.createElement('div')
     leftGroup.className = 'qc-highlight-actions-left'
 
-    const badge = document.createElement('span')
+    const badge = activeDocument.createElement('span')
     badge.className = `qc-clip-badge ${badgeCfg.cls}`
-    const iconEl = document.createElement('span')
+    const iconEl = activeDocument.createElement('span')
     iconEl.className = 'qc-badge-icon'
     setIcon(iconEl, badgeCfg.icon)
     badge.appendChild(iconEl)
-    badge.appendChild(document.createTextNode(badgeCfg.label))
+    badge.appendChild(activeDocument.createTextNode(badgeCfg.label))
     leftGroup.appendChild(badge)
 
     if (isPdf) {
         if (sourceHref) {
-            const link = document.createElement('a')
+            const link = activeDocument.createElement('a')
             link.href = sourceHref
             link.className = 'qc-view-link external-link'
             link.textContent = sourceLabel || 'Open PDF ↗'
@@ -276,7 +276,7 @@ async function buildCard(
             leftGroup.appendChild(link)
         } else if (sourceLabel) {
             if (clipUrl?.startsWith('file://')) {
-                const link = document.createElement('a')
+                const link = activeDocument.createElement('a')
                 link.className = 'qc-view-link external-link'
                 link.textContent = sourceLabel
                 link.href = clipUrl
@@ -284,20 +284,20 @@ async function buildCard(
                 link.rel = 'noopener'
                 leftGroup.appendChild(link)
             } else {
-                const localEl = document.createElement('span')
+                const localEl = activeDocument.createElement('span')
                 localEl.className = 'qc-captured'
                 localEl.textContent = sourceLabel
                 leftGroup.appendChild(localEl)
             }
         }
         if (pageNum) {
-            const pageEl = document.createElement('span')
+            const pageEl = activeDocument.createElement('span')
             pageEl.className = 'qc-pdf-page'
             pageEl.textContent = `p. ${pageNum}`
             leftGroup.appendChild(pageEl)
         }
     } else if (viewHref) {
-        const link = document.createElement('a')
+        const link = activeDocument.createElement('a')
         link.href = viewHref
         link.className = 'qc-view-link external-link'
         link.textContent = clipType === 'tweet' ? 'View tweet ↗' : 'View with highlight ↗'
@@ -308,21 +308,21 @@ async function buildCard(
 
     actionsEl.appendChild(leftGroup)
 
-    const rightGroup = document.createElement('div')
+    const rightGroup = activeDocument.createElement('div')
     rightGroup.className = 'qc-highlight-actions-right'
 
     if (captured) {
-        const capturedEl = document.createElement('span')
+        const capturedEl = activeDocument.createElement('span')
         capturedEl.className = 'qc-captured'
         capturedEl.textContent = captured
         rightGroup.appendChild(capturedEl)
 
-        const pipeSep = document.createElement('span')
+        const pipeSep = activeDocument.createElement('span')
         pipeSep.className = 'qc-footer-pipe'
         pipeSep.textContent = '|'
         rightGroup.appendChild(pipeSep)
 
-        const deleteBtn = document.createElement('button')
+        const deleteBtn = activeDocument.createElement('button')
         deleteBtn.className = 'qc-delete-btn qc-card-delete-btn'
         deleteBtn.textContent = '×'
         deleteBtn.title = 'Delete clip'
@@ -353,7 +353,7 @@ async function buildCard(
     footer.appendChild(sep2)
     footer.appendChild(actionsEl)
 
-    const card = document.createElement('div')
+    const card = activeDocument.createElement('div')
     card.className = 'qc-highlight-card'
 
     const persistKey = `${sourcePath}::${captured}`
@@ -361,7 +361,7 @@ async function buildCard(
     const raw = quoteEl.textContent?.trim() ?? ''
     buildCardHeader(card, badgeCfg, raw.length > 60 ? raw.slice(0, 60) + '…' : raw, persistKey)
 
-    const cardBody = document.createElement('div')
+    const cardBody = activeDocument.createElement('div')
     cardBody.className = 'qc-card-body'
 
     if (noteSection) {
@@ -389,7 +389,7 @@ async function buildCard(
 
     let tweetEmbedEl: HTMLElement | null = null
     if (clipType === 'tweet' && clipUrl) {
-        tweetEmbedEl = document.createElement('div')
+        tweetEmbedEl = activeDocument.createElement('div')
         tweetEmbedEl.className = 'qc-tweet-embed'
         cardBody.appendChild(tweetEmbedEl)
     } else {
@@ -497,7 +497,7 @@ async function buildCardV2(
     const badgeCfg = BADGE[clipType] ?? BADGE['highlight']
 
     // Build quote block: body children that are not nested callouts or the source link paragraph
-    const quoteContentEl = document.createElement('div')
+    const quoteContentEl = activeDocument.createElement('div')
     quoteContentEl.className = 'qc-highlight-quote'
     for (const child of Array.from(contentEl.children)) {
         if (child.matches('[data-callout^="qc_"]')) break
@@ -510,24 +510,24 @@ async function buildCardV2(
     const hasOnlyImage = !!(quoteContentEl.querySelector('img')) && (quoteContentEl.textContent?.trim() ?? '') === ''
     if (hasOnlyImage) quoteContentEl.classList.add('qc-highlight-quote--image')
 
-    const quoteIcon = document.createElement('span')
+    const quoteIcon = activeDocument.createElement('span')
     quoteIcon.className = 'qc-quote-icon'
     quoteIcon.textContent = '❝'
 
-    const quoteBlock = document.createElement('div')
+    const quoteBlock = activeDocument.createElement('div')
     quoteBlock.className = 'qc-quote-block'
     quoteBlock.appendChild(quoteIcon)
     quoteBlock.appendChild(quoteContentEl)
 
     // Footer
-    const footer = document.createElement('div')
+    const footer = activeDocument.createElement('div')
     footer.className = 'qc-highlight-footer'
 
     if (tags.length) {
-        const sep1 = document.createElement('hr'); sep1.className = 'qc-sep'
-        const tagsEl = document.createElement('div'); tagsEl.className = 'qc-highlight-tags'
+        const sep1 = activeDocument.createElement('hr'); sep1.className = 'qc-sep'
+        const tagsEl = activeDocument.createElement('div'); tagsEl.className = 'qc-highlight-tags'
         tags.forEach(tag => {
-            const chip = document.createElement('a')
+            const chip = activeDocument.createElement('a')
             chip.className = 'tag'; chip.textContent = tag; chip.href = tag
             tagsEl.appendChild(chip)
         })
@@ -535,42 +535,42 @@ async function buildCardV2(
         footer.appendChild(tagsEl)
     }
 
-    const sep2 = document.createElement('hr'); sep2.className = 'qc-sep'
-    const actionsEl = document.createElement('div'); actionsEl.className = 'qc-highlight-actions'
+    const sep2 = activeDocument.createElement('hr'); sep2.className = 'qc-sep'
+    const actionsEl = activeDocument.createElement('div'); actionsEl.className = 'qc-highlight-actions'
 
-    const leftGroup = document.createElement('div'); leftGroup.className = 'qc-highlight-actions-left'
-    const badge = document.createElement('span'); badge.className = `qc-clip-badge ${badgeCfg.cls}`
-    const iconEl = document.createElement('span'); iconEl.className = 'qc-badge-icon'
+    const leftGroup = activeDocument.createElement('div'); leftGroup.className = 'qc-highlight-actions-left'
+    const badge = activeDocument.createElement('span'); badge.className = `qc-clip-badge ${badgeCfg.cls}`
+    const iconEl = activeDocument.createElement('span'); iconEl.className = 'qc-badge-icon'
     setIcon(iconEl, badgeCfg.icon)
     badge.appendChild(iconEl)
-    badge.appendChild(document.createTextNode(badgeCfg.label))
+    badge.appendChild(activeDocument.createTextNode(badgeCfg.label))
     leftGroup.appendChild(badge)
 
     const isPdf = clipType === 'pdf-highlight'
     if (isPdf) {
         if (sourceHref) {
-            const link = document.createElement('a')
+            const link = activeDocument.createElement('a')
             link.href = sourceHref; link.className = 'qc-view-link external-link'
             link.textContent = sourceLabel || 'Open PDF ↗'; link.target = '_blank'; link.rel = 'noopener'
             leftGroup.appendChild(link)
         } else if (sourceLabel) {
             if (clipUrl?.startsWith('file://')) {
-                const link = document.createElement('a')
+                const link = activeDocument.createElement('a')
                 link.className = 'qc-view-link external-link'
                 link.textContent = sourceLabel
                 link.href = clipUrl; link.target = '_blank'; link.rel = 'noopener'
                 leftGroup.appendChild(link)
             } else {
-                const localEl = document.createElement('span'); localEl.className = 'qc-captured'
+                const localEl = activeDocument.createElement('span'); localEl.className = 'qc-captured'
                 localEl.textContent = sourceLabel; leftGroup.appendChild(localEl)
             }
         }
         if (pageNum) {
-            const pageEl = document.createElement('span'); pageEl.className = 'qc-pdf-page'
+            const pageEl = activeDocument.createElement('span'); pageEl.className = 'qc-pdf-page'
             pageEl.textContent = `p. ${pageNum}`; leftGroup.appendChild(pageEl)
         }
     } else if (viewHref) {
-        const link = document.createElement('a')
+        const link = activeDocument.createElement('a')
         link.href = viewHref; link.className = 'qc-view-link external-link'
         link.textContent = clipType === 'tweet' ? 'View tweet ↗' : 'View with highlight ↗'
         link.target = '_blank'; link.rel = 'noopener'
@@ -578,15 +578,15 @@ async function buildCardV2(
     }
     actionsEl.appendChild(leftGroup)
 
-    const rightGroup = document.createElement('div'); rightGroup.className = 'qc-highlight-actions-right'
+    const rightGroup = activeDocument.createElement('div'); rightGroup.className = 'qc-highlight-actions-right'
     if (captured) {
-        const capturedEl = document.createElement('span'); capturedEl.className = 'qc-captured'
+        const capturedEl = activeDocument.createElement('span'); capturedEl.className = 'qc-captured'
         capturedEl.textContent = captured; rightGroup.appendChild(capturedEl)
-        const pipeSep = document.createElement('span'); pipeSep.className = 'qc-footer-pipe'
+        const pipeSep = activeDocument.createElement('span'); pipeSep.className = 'qc-footer-pipe'
         pipeSep.textContent = '|'; rightGroup.appendChild(pipeSep)
     }
     if (hash) {
-        const deleteBtn = document.createElement('button')
+        const deleteBtn = activeDocument.createElement('button')
         deleteBtn.className = 'qc-delete-btn qc-card-delete-btn'
         deleteBtn.textContent = '×'; deleteBtn.title = 'Delete clip'
         deleteBtn.addEventListener('click', async (e) => {
@@ -610,14 +610,14 @@ async function buildCardV2(
     footer.appendChild(sep2)
     footer.appendChild(actionsEl)
 
-    const card = document.createElement('div'); card.className = 'qc-highlight-card'
+    const card = activeDocument.createElement('div'); card.className = 'qc-highlight-card'
 
     const persistKey = hash || `${sourcePath}::${captured}`
     if (!getExpandedSet().has(persistKey)) card.classList.add('qc-card-collapsed')
     const raw = quoteContentEl.textContent?.trim() ?? ''
     buildCardHeader(card, badgeCfg, raw.length > 60 ? raw.slice(0, 60) + '…' : raw, persistKey)
 
-    const cardBody = document.createElement('div'); cardBody.className = 'qc-card-body'
+    const cardBody = activeDocument.createElement('div'); cardBody.className = 'qc-card-body'
 
     if (noteCallout) {
         const cloned = noteCallout.cloneNode(true) as HTMLElement
@@ -636,7 +636,7 @@ async function buildCardV2(
 
     let tweetEmbedEl: HTMLElement | null = null
     if (clipType === 'tweet' && clipUrl) {
-        tweetEmbedEl = document.createElement('div'); tweetEmbedEl.className = 'qc-tweet-embed'
+        tweetEmbedEl = activeDocument.createElement('div'); tweetEmbedEl.className = 'qc-tweet-embed'
         cardBody.appendChild(tweetEmbedEl)
     } else {
         cardBody.appendChild(quoteBlock)

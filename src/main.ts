@@ -143,7 +143,7 @@ export default class QuickClipCapturePlugin extends Plugin {
 
     onunload(): void {
         for (const type of Object.keys(DEFAULT_CALLOUT_COLORS)) {
-            document.body.style.removeProperty(`--qc-color-${type}`)
+            activeDocument.body.style.removeProperty(`--qc-color-${type}`)
         }
     }
 
@@ -151,7 +151,7 @@ export default class QuickClipCapturePlugin extends Plugin {
         const colors = { ...DEFAULT_CALLOUT_COLORS, ...this.settings.calloutColors }
         for (const [type, hex] of Object.entries(colors)) {
             const [r, g, b] = hexToRgb(hex)
-            document.body.style.setProperty(`--qc-color-${type}`, `${r}, ${g}, ${b}`)
+            activeDocument.body.style.setProperty(`--qc-color-${type}`, `${r}, ${g}, ${b}`)
         }
     }
 

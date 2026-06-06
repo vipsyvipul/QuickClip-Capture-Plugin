@@ -117,7 +117,7 @@ export class ClipManagerView extends ItemView {
         this.resizeDragCleanup?.()
         this.resizeDragCleanup = null
         if (this.colPickerClose) {
-            document.removeEventListener('click', this.colPickerClose)
+            activeDocument.removeEventListener('click', this.colPickerClose)
             this.colPickerClose = null
         }
         if (this.snippetRefreshTimer) {
@@ -283,7 +283,7 @@ export class ClipManagerView extends ItemView {
 
     private render(): void {
         if (this.colPickerClose) {
-            document.removeEventListener('click', this.colPickerClose)
+            activeDocument.removeEventListener('click', this.colPickerClose)
             this.colPickerClose = null
         }
 
@@ -487,16 +487,16 @@ export class ClipManagerView extends ItemView {
             panel.toggleClass('is-hidden', isOpen)
             if (isOpen) {
                 if (this.colPickerClose) {
-                    document.removeEventListener('click', this.colPickerClose)
+                    activeDocument.removeEventListener('click', this.colPickerClose)
                     this.colPickerClose = null
                 }
             } else {
                 this.colPickerClose = () => {
                     panel.addClass('is-hidden')
-                    document.removeEventListener('click', this.colPickerClose!)
+                    activeDocument.removeEventListener('click', this.colPickerClose!)
                     this.colPickerClose = null
                 }
-                document.addEventListener('click', this.colPickerClose)
+                activeDocument.addEventListener('click', this.colPickerClose)
             }
         })
         panel.addEventListener('click', (e) => e.stopPropagation())
@@ -667,7 +667,7 @@ export class ClipManagerView extends ItemView {
                 e.stopPropagation()
                 const startX = e.clientX
                 const startW = th.offsetWidth
-                document.body.addClass('qc-no-select')
+                activeDocument.body.addClass('qc-no-select')
 
                 const onMove = (ev: MouseEvent) => {
                     const newW = Math.max(60, startW + (ev.clientX - startX))
@@ -675,23 +675,23 @@ export class ClipManagerView extends ItemView {
                 }
 
                 const cleanup = () => {
-                    document.removeEventListener('mousemove', onMove)
-                    document.removeEventListener('mouseup', onUp)
-                    document.body.removeClass('qc-no-select')
+                    activeDocument.removeEventListener('mousemove', onMove)
+                    activeDocument.removeEventListener('mouseup', onUp)
+                    activeDocument.body.removeClass('qc-no-select')
                     this.resizeDragCleanup = null
                 }
 
                 const onUp = async () => {
                     cleanup()
-                    if (document.contains(th)) {
+                    if (activeDocument.contains(th)) {
                         this.plugin.settings.columnWidths[key] = th.offsetWidth
                         await this.plugin.saveSettings()
                     }
                 }
 
                 this.resizeDragCleanup = cleanup
-                document.addEventListener('mousemove', onMove)
-                document.addEventListener('mouseup', onUp)
+                activeDocument.addEventListener('mousemove', onMove)
+                activeDocument.addEventListener('mouseup', onUp)
             })
         }
     }
@@ -832,7 +832,7 @@ export class ClipManagerView extends ItemView {
         const noteCell = tr.querySelector('.qc-cell--has-notes') as HTMLElement | null
         if (noteCell) noteCell.textContent = this.noteCache.get(clipKey(ref)) ? 'Yes' : 'No'
         const noteInput = tr.querySelector('.qc-note-input') as HTMLTextAreaElement | null
-        if (noteInput && document.activeElement !== noteInput) {
+        if (noteInput && activeDocument.activeElement !== noteInput) {
             const noteText = this.noteTextCache.get(clipKey(ref)) ?? ''
             noteInput.value = noteText
             noteInput.dataset.saved = noteText
