@@ -21,7 +21,7 @@ export class QuickClipSettingTab extends PluginSettingTab {
         const { containerEl } = this
         containerEl.empty()
 
-        new Setting(containerEl).setName('Capture Settings').setHeading()
+        new Setting(containerEl).setName('Clip Manager').setHeading()
 
         new Setting(containerEl)
             .setName('Auto-open on startup')
