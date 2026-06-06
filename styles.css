@@ -883,6 +883,80 @@ th[data-col-key="has_notes"] {
 
 /* ── Migration ───────────────────────────────────────────────── */
 
+.qc-migrate-section {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+}
+
+.qc-migrate-section h3 {
+    margin: 0 0 12px;
+}
+
+.qc-migrate-desc {
+    font-size: var(--font-ui-small);
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.qc-migrate-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 14px;
+}
+
+.qc-migrate-file-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    background: var(--background-primary);
+    border-radius: 4px;
+}
+
+.qc-migrate-file-info {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+
+.qc-migrate-file-name {
+    font-size: var(--font-ui-small);
+    font-weight: 500;
+    color: var(--text-normal);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.qc-migrate-file-name:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+}
+
+.qc-migrate-file-count {
+    font-size: var(--font-ui-smaller);
+    color: var(--text-faint);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.qc-migrate-file-btn {
+    flex-shrink: 0;
+    margin-left: 12px;
+    font-size: var(--font-ui-smaller);
+}
+
+.qc-migrate-all-btn {
+    margin-bottom: 4px;
+}
+
 .qc-migrate-status {
     margin-top: 12px;
 }

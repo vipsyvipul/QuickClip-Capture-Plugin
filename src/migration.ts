@@ -222,31 +222,189 @@ function buildNewBlock(block: OldBlock, hash: string): string {
     return s
 }
 
-// ─── Detection ───────────────────────────────────────────────────────────────
+// ─── Core per-file migration ─────────────────────────────────────────────────
 
-export async function hasOldFormatClips(app: App): Promise<boolean> {
-    const index = await loadIndex(app)
-    const seen = new Set<string>()
-    for (const entry of Object.values(index)) {
-        for (const clip of (entry as any).clips ?? []) {
-            if (!clip.path || seen.has(clip.path)) continue
-            seen.add(clip.path)
-            const file = app.vault.getAbstractFileByPath(clip.path)
-            if (!(file instanceof TFile)) continue
-            const content = await app.vault.read(file)
-            if (/^> \[!(quote|clip)\]/im.test(content)) return true
+async function processOneFile(
+    app: App,
+    filePath: string,
+    clipsForFile: Array<{ url: string; clip: any }>,
+    index: Record<string, any>,
+    report: MigrationReport
+): Promise<{ fileModified: boolean; indexModified: boolean }> {
+    const file = app.vault.getAbstractFileByPath(filePath)
+    if (!(file instanceof TFile)) return { fileModified: false, indexModified: false }
+
+    const content = await app.vault.read(file)
+    if (!/^> \[!(quote|clip)\]/im.test(content)) { report.skipped++; return { fileModified: false, indexModified: false } }
+    const lines = content.split('\n')
+    const blocks = findOldBlocks(lines)
+    if (blocks.length === 0) { report.skipped++; return { fileModified: false, indexModified: false } }
+
+    let fileModified = false
+    let indexModified = false
+
+    // Reverse order: splice later blocks first so earlier indices stay valid
+    for (let b = blocks.length - 1; b >= 0; b--) {
+        const block = blocks[b]
+        const preview = clipPreview(block.contentLines.filter(l => !l.startsWith('![')), 40)
+            || block.calloutTitle
+
+        if (!TITLE_TO_QC[block.calloutTitle.toLowerCase()]) {
+            report.results.push({ filePath, preview, status: 'error',
+                reason: `Unknown callout type: "${block.calloutTitle}"` })
+            continue
         }
+
+        if (!block.captured) {
+            report.results.push({ filePath, preview, status: 'error',
+                reason: 'Could not find Captured date in metadata table' })
+            continue
+        }
+
+        // ── Resolve hash ───────────────────────────────────────────────
+        let hash: string | null = null
+
+        // Images store hash directly as "Image ID"
+        hash = block.tableRows.get('Image ID') ?? null
+
+        if (!hash) {
+            const matches = clipsForFile.filter(({ clip }) => {
+                if (!clip.savedAt) return false
+                return formatCaptured(clip.savedAt) === block.captured
+            })
+
+            if (matches.length > 1) {
+                report.results.push({ filePath, preview, status: 'error',
+                    reason: 'Two clips saved in the same minute — cannot determine which index entry to use' })
+                continue
+            }
+
+            if (matches.length === 1) {
+                if (matches[0].clip.hash) {
+                    hash = matches[0].clip.hash
+                } else {
+                    // Index entry exists but hash is missing — generate and patch in place
+                    hash = generateHash(filePath + block.captured)
+                    matches[0].clip.hash = hash
+                    indexModified = true
+                }
+            }
+        }
+
+        // ── Orphaned: not in index ─────────────────────────────────────
+        if (!hash) {
+            hash = generateHash(filePath + block.captured)
+
+            // Find URL from nearest heading above the block
+            let url = ''
+            for (let li = block.blockStart - 1; li >= 0; li--) {
+                const hm = lines[li].match(/^#+\s+\[.*?\]\(([^)]+)\)/)
+                if (hm) { url = hm[1]; break }
+            }
+
+            if (!url) {
+                report.results.push({ filePath, preview, status: 'error',
+                    reason: 'Clip is not in clipsHistory.json and no URL heading found — skipped' })
+                continue
+            }
+
+            const qcType = TITLE_TO_QC[block.calloutTitle.toLowerCase()] ?? 'qc_highlight'
+            const clipType = qcType === 'qc_highlight' ? 'highlight'
+                : qcType === 'qc_tweet' ? 'tweet'
+                : qcType === 'qc_pdf_highlight' ? 'pdf-highlight'
+                : 'image'
+            const savedAt = parseCapturedToIso(block.captured)
+            const tags = (block.tableRows.get('Tags') ?? '')
+                .split(/\s+/).filter(Boolean).map((t: string) => t.replace(/^#/, ''))
+
+            const newClip: any = { clip_type: clipType, hash, savedAt, path: filePath, tags }
+            if (clipType === 'highlight')
+                newClip.text = block.contentLines.join(' ').slice(0, 500)
+
+            if (!index[url]) {
+                const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
+                index[url] = {
+                    title: '', content_type: 'article', type: 'Note',
+                    organized: false, archived: false, belongs_to: '', related_to: [],
+                    domain, first_clipped: savedAt, last_clipped: savedAt, clips: [],
+                }
+            }
+            index[url].clips.push(newClip)
+            indexModified = true
+
+            report.results.push({ filePath, preview, status: 'warning',
+                reason: 'Clip was not in clipsHistory.json — reconstructed and added' })
+        }
+
+        // ── Replace block in lines array ───────────────────────────────
+        const startWithBlank = block.blockStart > 0 && lines[block.blockStart - 1] === ''
+            ? block.blockStart - 1 : block.blockStart
+
+        const newLines = buildNewBlock(block, hash).split('\n')
+        // buildNewBlock ends with '\n---\n\n', so split gives a trailing ''
+        while (newLines.length > 0 && newLines[newLines.length - 1] === '') newLines.pop()
+
+        // Re-insert the preceding blank line if we consumed it
+        if (startWithBlank < block.blockStart) newLines.unshift('')
+
+        lines.splice(startWithBlank, block.blockEnd - startWithBlank, ...newLines)
+        fileModified = true
+        report.migrated++
     }
-    // Also check markdown files not referenced in the index
-    for (const file of app.vault.getMarkdownFiles()) {
-        if (seen.has(file.path)) continue
-        const content = await app.vault.read(file)
-        if (/^> \[!(quote|clip)\]/im.test(content)) return true
-    }
-    return false
+
+    if (fileModified) await app.vault.modify(file, lines.join('\n'))
+    return { fileModified, indexModified }
 }
 
-// ─── Main migration ──────────────────────────────────────────────────────────
+// ─── Scan for files with old-format clips ────────────────────────────────────
+
+export async function scanOldFormatFiles(app: App): Promise<{ filePath: string; blockCount: number }[]> {
+    const index = await loadIndex(app)
+    const results: { filePath: string; blockCount: number }[] = []
+    const seen = new Set<string>()
+
+    const checkFile = async (file: TFile) => {
+        if (seen.has(file.path)) return
+        seen.add(file.path)
+        const content = await app.vault.read(file)
+        if (!/^> \[!(quote|clip)\]/im.test(content)) return
+        const blocks = findOldBlocks(content.split('\n'))
+        if (blocks.length > 0) results.push({ filePath: file.path, blockCount: blocks.length })
+    }
+
+    for (const entry of Object.values(index)) {
+        for (const clip of ((entry as any).clips ?? [])) {
+            if (!clip.path) continue
+            const file = app.vault.getAbstractFileByPath(clip.path)
+            if (file instanceof TFile) await checkFile(file)
+        }
+    }
+
+    for (const file of app.vault.getMarkdownFiles()) await checkFile(file)
+
+    return results.sort((a, b) => a.filePath.localeCompare(b.filePath))
+}
+
+// ─── Migrate a single file ───────────────────────────────────────────────────
+
+export async function migrateOldFormatFile(app: App, filePath: string): Promise<MigrationReport> {
+    const index = await loadIndex(app)
+    const report: MigrationReport = { migrated: 0, skipped: 0, results: [] }
+
+    const clipsForFile: Array<{ url: string; clip: any }> = []
+    for (const [url, entry] of Object.entries(index)) {
+        for (const clip of (entry.clips ?? [])) {
+            if (clip.path === filePath) clipsForFile.push({ url, clip })
+        }
+    }
+
+    const { indexModified } = await processOneFile(app, filePath, clipsForFile, index, report)
+    if (indexModified) await saveIndex(app, index)
+
+    return report
+}
+
+// ─── Migrate all files ───────────────────────────────────────────────────────
 
 export async function migrateOldFormatClips(app: App): Promise<MigrationReport> {
     const index = await loadIndex(app)
@@ -268,134 +426,16 @@ export async function migrateOldFormatClips(app: App): Promise<MigrationReport> 
         if (!fileToClips.has(file.path)) fileToClips.set(file.path, [])
     }
 
-    let indexModified = false
+    let anyIndexModified = false
 
     for (const filePath of fileToClips.keys()) {
-        const file = app.vault.getAbstractFileByPath(filePath)
-        if (!(file instanceof TFile)) continue
-
-        const content = await app.vault.read(file)
-        if (!/^> \[!(quote|clip)\]/im.test(content)) { report.skipped++; continue }
-        const lines = content.split('\n')
-        const blocks = findOldBlocks(lines)
-        if (blocks.length === 0) { report.skipped++; continue }
-
-        const clipsForFile = fileToClips.get(filePath)!
-        let fileModified = false
-
-        // Reverse order: splice later blocks first so earlier indices stay valid
-        for (let b = blocks.length - 1; b >= 0; b--) {
-            const block = blocks[b]
-            const preview = clipPreview(block.contentLines.filter(l => !l.startsWith('![')), 40)
-                || block.calloutTitle
-
-            if (!TITLE_TO_QC[block.calloutTitle.toLowerCase()]) {
-                report.results.push({ filePath, preview, status: 'error',
-                    reason: `Unknown callout type: "${block.calloutTitle}"` })
-                continue
-            }
-
-            if (!block.captured) {
-                report.results.push({ filePath, preview, status: 'error',
-                    reason: 'Could not find Captured date in metadata table' })
-                continue
-            }
-
-            // ── Resolve hash ───────────────────────────────────────────────
-            let hash: string | null = null
-
-            // Images store hash directly as "Image ID"
-            hash = block.tableRows.get('Image ID') ?? null
-
-            if (!hash) {
-                const matches = clipsForFile.filter(({ clip }) => {
-                    if (!clip.savedAt) return false
-                    return formatCaptured(clip.savedAt) === block.captured
-                })
-
-                if (matches.length > 1) {
-                    report.results.push({ filePath, preview, status: 'error',
-                        reason: 'Two clips saved in the same minute — cannot determine which index entry to use' })
-                    continue
-                }
-
-                if (matches.length === 1) {
-                    if (matches[0].clip.hash) {
-                        hash = matches[0].clip.hash
-                    } else {
-                        // Index entry exists but hash is missing — generate and patch in place
-                        hash = generateHash(filePath + block.captured)
-                        matches[0].clip.hash = hash
-                        indexModified = true
-                    }
-                }
-            }
-
-            // ── Orphaned: not in index ─────────────────────────────────────
-            if (!hash) {
-                hash = generateHash(filePath + block.captured)
-
-                // Find URL from nearest heading above the block
-                let url = ''
-                for (let li = block.blockStart - 1; li >= 0; li--) {
-                    const hm = lines[li].match(/^#+\s+\[.*?\]\(([^)]+)\)/)
-                    if (hm) { url = hm[1]; break }
-                }
-
-                if (!url) {
-                    report.results.push({ filePath, preview, status: 'error',
-                        reason: 'Clip is not in clipsHistory.json and no URL heading found — skipped' })
-                    continue
-                }
-
-                const qcType = TITLE_TO_QC[block.calloutTitle.toLowerCase()] ?? 'qc_highlight'
-                const clipType = qcType === 'qc_highlight' ? 'highlight'
-                    : qcType === 'qc_tweet' ? 'tweet'
-                    : qcType === 'qc_pdf_highlight' ? 'pdf-highlight'
-                    : 'image'
-                const savedAt = parseCapturedToIso(block.captured)
-                const tags = (block.tableRows.get('Tags') ?? '')
-                    .split(/\s+/).filter(Boolean).map((t: string) => t.replace(/^#/, ''))
-
-                const newClip: any = { clip_type: clipType, hash, savedAt, path: filePath, tags }
-                if (clipType === 'highlight')
-                    newClip.text = block.contentLines.join(' ').slice(0, 500)
-
-                if (!index[url]) {
-                    const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
-                    index[url] = {
-                        title: '', content_type: 'article', type: 'Note',
-                        organized: false, archived: false, belongs_to: '', related_to: [],
-                        domain, first_clipped: savedAt, last_clipped: savedAt, clips: [],
-                    }
-                }
-                index[url].clips.push(newClip)
-                indexModified = true
-
-                report.results.push({ filePath, preview, status: 'warning',
-                    reason: 'Clip was not in clipsHistory.json — reconstructed and added' })
-            }
-
-            // ── Replace block in lines array ───────────────────────────────
-            const startWithBlank = block.blockStart > 0 && lines[block.blockStart - 1] === ''
-                ? block.blockStart - 1 : block.blockStart
-
-            const newLines = buildNewBlock(block, hash).split('\n')
-            // buildNewBlock ends with '\n---\n\n', so split gives a trailing ''
-            while (newLines.length > 0 && newLines[newLines.length - 1] === '') newLines.pop()
-
-            // Re-insert the preceding blank line if we consumed it
-            if (startWithBlank < block.blockStart) newLines.unshift('')
-
-            lines.splice(startWithBlank, block.blockEnd - startWithBlank, ...newLines)
-            fileModified = true
-            report.migrated++
-        }
-
-        if (fileModified) await app.vault.modify(file, lines.join('\n'))
+        const { indexModified } = await processOneFile(
+            app, filePath, fileToClips.get(filePath)!, index, report
+        )
+        if (indexModified) anyIndexModified = true
     }
 
-    if (indexModified) await saveIndex(app, index)
+    if (anyIndexModified) await saveIndex(app, index)
 
     return report
 }

@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting, TFile, setIcon } from 'obsidian'
 import QuickClipCapturePlugin, { DEFAULT_CALLOUT_COLORS } from './main'
 import { VIEW_CLIP_MANAGER } from './views/ClipManagerView'
-import { migrateOldFormatClips, hasOldFormatClips, MigrationClipResult } from './migration'
+import { migrateOldFormatClips, migrateOldFormatFile, scanOldFormatFiles, MigrationClipResult } from './migration'
 
 const CALLOUT_COLOR_ROWS: { key: string; label: string }[] = [
     { key: 'qc_highlight',     label: 'Highlight' },
@@ -151,29 +151,81 @@ export class QuickClipSettingTab extends PluginSettingTab {
                 }))
 
         // ── Migration (hidden until old clips detected) ──────────────────────
-        const migrateSection = containerEl.createDiv()
+        const migrateSection = containerEl.createDiv({ cls: 'qc-migrate-section' })
         migrateSection.style.display = 'none'
 
         migrateSection.createEl('h3', { text: 'Migration' })
-        migrateSection.createEl('p', {
-            text: 'This will rewrite your clip files to use the new nested callout format. Already-migrated clips are left untouched. Cannot be undone — stay on this screen until migration finishes. Errors and warnings, if any, will be listed below.',
-            cls: 'setting-item-description',
-        })
 
-        const migrateBtn = migrateSection.createEl('button', { text: 'Migrate clips to new format', cls: 'mod-cta' })
+        const desc = migrateSection.createEl('p', { cls: 'qc-migrate-desc' })
+        desc.appendText('The following files contain clips saved in the old format. Migrating rewrites them to use ')
+        const calloutLink = desc.createEl('a', { text: 'nested callouts', cls: 'external-link' })
+        calloutLink.href = 'https://obsidian.md/help/callouts'
+        desc.appendText(' — a cleaner structure that enables per-clip colors, collapsible cards, and richer metadata. This operation cannot be undone.')
+
+        const fileListEl = migrateSection.createDiv({ cls: 'qc-migrate-file-list' })
+
+        const migrateAllBtn = migrateSection.createEl('button', { text: 'Migrate all files', cls: 'mod-cta qc-migrate-all-btn' })
         const statusEl = migrateSection.createDiv({ cls: 'qc-migrate-status' })
 
-        const stored = this.plugin.settings.lastMigrationReport
-
-        if (!(stored && stored.results.length === 0)) {
-            hasOldFormatClips(this.app).then(hasOld => {
-                if (hasOld) migrateSection.style.display = ''
-            })
+        const setAllDisabled = (disabled: boolean) => {
+            migrateAllBtn.disabled = disabled
+            fileListEl.querySelectorAll<HTMLButtonElement>('.qc-migrate-file-btn')
+                .forEach(b => { b.disabled = disabled })
         }
 
-        migrateBtn.addEventListener('click', async () => {
-            migrateBtn.disabled = true
-            migrateBtn.setText('Migrating…')
+        const renderFileList = (files: { filePath: string; blockCount: number }[]) => {
+            fileListEl.empty()
+            for (const { filePath, blockCount } of files) {
+                const row = fileListEl.createDiv({ cls: 'qc-migrate-file-row' })
+                const info = row.createDiv({ cls: 'qc-migrate-file-info' })
+                const rawName = filePath.split('/').pop() ?? filePath
+                const displayName = rawName.endsWith('.md') ? rawName.slice(0, -3) : rawName
+                const nameLink = info.createEl('a', { text: displayName, cls: 'qc-migrate-file-name' })
+                nameLink.title = filePath
+                nameLink.href = '#'
+                nameLink.addEventListener('click', e => {
+                    e.preventDefault()
+                    const file = this.app.vault.getAbstractFileByPath(filePath)
+                    if (file instanceof TFile) this.app.workspace.getLeaf(false).openFile(file)
+                })
+                info.createSpan({
+                    text: `${blockCount} clip${blockCount !== 1 ? 's' : ''}`,
+                    cls: 'qc-migrate-file-count',
+                })
+                const btn = row.createEl('button', { text: 'Migrate', cls: 'qc-migrate-file-btn' })
+                btn.addEventListener('click', async () => {
+                    setAllDisabled(true)
+                    btn.setText('Migrating…')
+                    statusEl.empty()
+                    let report
+                    try {
+                        report = await migrateOldFormatFile(this.app, filePath)
+                    } catch (err) {
+                        statusEl.createEl('p', { text: `Migration failed: ${err}`, cls: 'qc-migrate-error' })
+                        setAllDisabled(false)
+                        btn.setText('Migrate')
+                        return
+                    }
+                    statusEl.empty()
+                    this.renderMigrationResults(statusEl, { ...report, timestamp: new Date().toISOString() })
+                    const remaining = await scanOldFormatFiles(this.app)
+                    renderFileList(remaining)
+                    setAllDisabled(false)
+                    if (remaining.length === 0) migrateSection.style.display = 'none'
+                })
+            }
+        }
+
+        scanOldFormatFiles(this.app).then(files => {
+            if (files.length > 0) {
+                migrateSection.style.display = ''
+                renderFileList(files)
+            }
+        })
+
+        migrateAllBtn.addEventListener('click', async () => {
+            setAllDisabled(true)
+            migrateAllBtn.setText('Migrating…')
             statusEl.empty()
             statusEl.createEl('p', {
                 text: '⏳ Migration in progress — do not close Obsidian until this is complete.',
@@ -186,8 +238,8 @@ export class QuickClipSettingTab extends PluginSettingTab {
             } catch (err) {
                 statusEl.empty()
                 statusEl.createEl('p', { text: `Migration failed: ${err}`, cls: 'qc-migrate-error' })
-                migrateBtn.disabled = false
-                migrateBtn.setText('Migrate clips to new format')
+                setAllDisabled(false)
+                migrateAllBtn.setText('Migrate all files')
                 return
             }
 
@@ -203,12 +255,11 @@ export class QuickClipSettingTab extends PluginSettingTab {
             statusEl.empty()
             this.renderMigrationResults(statusEl, result)
 
-            if (result.results.length === 0) {
-                migrateSection.style.display = 'none'
-            } else {
-                migrateBtn.disabled = false
-                migrateBtn.setText('Migrate clips to new format')
-            }
+            const remaining = await scanOldFormatFiles(this.app)
+            renderFileList(remaining)
+            setAllDisabled(false)
+            if (remaining.length === 0) migrateSection.style.display = 'none'
+            else migrateAllBtn.setText('Migrate all files')
         })
     }
 
