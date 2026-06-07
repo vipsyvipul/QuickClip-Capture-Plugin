@@ -1,7 +1,7 @@
 {
   "id": "quickclip-capture",
   "name": "QuickClip Capture Manager",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "minAppVersion": "1.7.2",
   "description": "Renders and manages clips saved by the QuickClip Capture browser extension.",
   "author": "Vipul Bansal",
